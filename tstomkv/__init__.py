@@ -3,6 +3,8 @@ import sys
 import tomllib
 from pathlib import Path
 
+__appname__ = "tstomkv"
+
 
 def errorNotify(exci, e, fname=None):
     lineno = exci.tb_lineno

@@ -2,8 +2,7 @@ import tstomkv
 
 
 def main():
-    v = tstomkv.getVersion()
-    print(f"tstomkv version: {v}")
+    print(f"{tstomkv.__appname__} version: {tstomkv.getVersion()}")
 
 
 if __name__ == "__main__":
