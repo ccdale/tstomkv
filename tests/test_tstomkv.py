@@ -114,7 +114,9 @@ class TestProgressBar:
 
     @patch("builtins.print")
     @patch("tstomkv.errorNotify")
-    def test_progressBar_exception_handling(self, mock_error_notify, mock_print):
+    def test_progressBar_exception_handling(
+        self, mock_error_notify, mock_print
+    ):  # noqa: E501
         """Test progress bar exception handling."""
         # Cause a division by zero error
         tstomkv.progressBar(5, 0)

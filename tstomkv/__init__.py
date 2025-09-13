@@ -67,8 +67,8 @@ def getVersion() -> str:
 class colours:
     """
     Colours class: provides ANSI escape codes for terminal text formatting.
-    Use colours.fg.<colour> for foreground and colours.bg.<colour> for background.
-    Also provides formatting options like bold, underline, etc.
+    Use colours.fg.<colour> for foreground and colours.bg.<colour>
+    for background. Also provides formatting options like bold, underline, etc.
     """
 
     reset = "\033[0m"
@@ -134,7 +134,9 @@ def progressBar(
         percent = 100 * (progress / float(total))
         fill = chr(9609)  # left 3/4 filled block
         blank = chr(9617)  # light shaded character
-        bar = colour + fill * int(percent) + bgcolour + blank * (100 - int(percent))
+        blanks = blank * (100 - int(percent))
+        fills = fill * int(percent)
+        bar = f"{colour}{fills}{bgcolour}{blanks}"
         if showValues:
             msg = f"\r|{bar}| {progress} / {total}"
         else:
