@@ -1,5 +1,9 @@
+import tstomkv
+
+
 def main():
-    print("Hello from tstomkv!")
+    v = tstomkv.getVersion()
+    print(f"tstomkv version: {v}")
 
 
 if __name__ == "__main__":
