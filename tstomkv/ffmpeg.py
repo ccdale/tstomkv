@@ -9,13 +9,21 @@ from pathlib import Path
 from tstomkv import errorRaise
 
 
-def convert_ts_to_mkv(input_file: str, output_file: str, statsfile: str):
+def convert_ts_to_mkv(
+    input_file: str, output_file: str, statsfile: str, overwrite=False
+):
+    """transcode a transport stream file to mkv x265/aac"""
     try:
-        # Simulate conversion process
         if not input_file.lower().endswith(".ts"):
             raise ValueError("Input file must be a .ts file")
         if not output_file.endswith(".mkv"):
             raise ValueError("Output file must be a .mkv file")
+        if not overwrite and removeFileIfExists(output_file, reportOnly=True):
+            raise FileExistsError(
+                f"Output file {output_file} exists and overwrite is False"
+            )
+        else:
+            removeFileIfExists(output_file)
         print(f"Converting {input_file} to {output_file}...")
         # options:
         # -stats_period 5 - write stats every 5 seconds to statsfile
