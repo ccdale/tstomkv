@@ -125,12 +125,12 @@ def dirFileList(path, filterext=None):
 def remoteFileList():
     """list files on the media server"""
     try:
-        findcmd = "find /home/chris/seagate4/TV /home/chris/seagate4/Films -name \\*ts"
         cfg = readConfig()
         mhost = cfg["mediaserver"]["host"]
         muser = cfg["mediaserver"]["user"]
         mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
         ckwargs = {"key_filename": mkeyfn}
+        findcmd = f"find {cfg['mediaserver']['koditvdir']} {cfg['mediaserver']['kodifilmdir']} -name \\*ts"
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
             result = c.run(findcmd, hide=True)
             files = result.stdout.strip().split("\n")
