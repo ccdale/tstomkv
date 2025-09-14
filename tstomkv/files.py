@@ -61,6 +61,46 @@ def sendFileTo(fn, vtype="v"):
         errorNotify(sys.exc_info()[2], e)
 
 
+def sendFile(src, dst):
+    """send a file to the media server"""
+    try:
+        cfg = readConfig()
+        mhost = cfg["mediaserver"]["host"]
+        muser = cfg["mediaserver"]["user"]
+        mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
+        ckwargs = {"key_filename": mkeyfn}
+        with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
+            c.put(src, dst)
+        return True
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
+        return False
+
+
+def getFile(src, dst):
+    """get a file from the media server"""
+    try:
+        cfg = readConfig()
+        mhost = cfg["mediaserver"]["host"]
+        muser = cfg["mediaserver"]["user"]
+        mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
+        ckwargs = {"key_filename": mkeyfn}
+        with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
+            c.get(src, dst)
+        return True
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
+        return False
+
+
+def fileSize(fn):
+    try:
+        return os.path.getsize(fn)
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
+        return -1
+
+
 def homeDir():
     try:
         return os.path.expandvars("$HOME")
