@@ -61,7 +61,8 @@ def main():
     files = remoteFileList()
     print(f"{len(files)} Remote files")
     for src in files:
-        if Path.exists(cfg["DEFAULT"]["transcodedir"] / "STOP") is True:
+        stopfn = cfg["DEFAULT"]["transcodedir"] / "STOP"
+        if Path.exists(stopfn) is True:
             raise Exception("STOP file found, exiting")
         if cfg["mediaserver"].get("koditvdir") in src:
             dest = src.replace(
