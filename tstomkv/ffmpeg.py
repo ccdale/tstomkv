@@ -24,7 +24,7 @@ def convert_ts_to_mkv(
             )
         else:
             removeFileIfExists(output_file)
-        print(f"Converting {input_file} to {output_file}...")
+        print(f"Transcoding {input_file} to {output_file}...")
         # options:
         # -stats_period 5 - write stats every 5 seconds to statsfile
         # -progress statsfile - changes the output of ffmpeg to
@@ -37,6 +37,9 @@ def convert_ts_to_mkv(
 
         cmd = [
             "ffmpeg",
+            "-loglevel",
+            "error",
+            "-hide_banner",
             "-progress",
             statsfile,
             "-stats_period",
@@ -126,3 +129,19 @@ def takeSnapshot(src, outjpg, location="40"):
                     return outjpg
     except Exception as e:
         errorRaise(sys.exc_info()[2], e)
+
+
+def videoDuration(fqfn):
+    """use ffprobe. returns duration in seconds or None."""
+    try:
+        finfo = fileInfo(fqfn)
+        if finfo and "streams" in finfo:
+            for stream in finfo["streams"]:
+                if "codec_type" in stream and stream["codec_type"] == "video":
+                    if "duration" in stream:
+                        # no need to be exact, just return int seconds
+                        return int(float(stream["duration"]))
+        return None
+    except Exception as e:
+        errorRaise(sys.exc_info()[2], e)
+        return None

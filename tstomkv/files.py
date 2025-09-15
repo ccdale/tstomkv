@@ -77,7 +77,7 @@ def sendFile(src, dst):
         return False
 
 
-def getFile(src, dst):
+def getFile(src, dst, banner=False):
     """get a file from the media server"""
     try:
         cfg = readConfig()
@@ -85,6 +85,8 @@ def getFile(src, dst):
         muser = cfg["mediaserver"]["user"]
         mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
         ckwargs = {"key_filename": mkeyfn}
+        if banner:
+            print(f"Retrieving {dst} from {mhost}:{src}")
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
             c.get(src, dst)
         return True
