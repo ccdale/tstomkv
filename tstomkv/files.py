@@ -61,7 +61,7 @@ def sendFileTo(fn, vtype="v"):
         errorNotify(sys.exc_info()[2], e)
 
 
-def sendFile(src, dst):
+def sendFile(src, dst, banner=False):
     """send a file to the media server"""
     try:
         cfg = readConfig()
@@ -69,6 +69,8 @@ def sendFile(src, dst):
         muser = cfg["mediaserver"]["user"]
         mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
         ckwargs = {"key_filename": mkeyfn}
+        if banner:
+            print(f"sending {src} to {mhost}:{dst}")
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
             c.put(src, dst)
         return True
@@ -140,3 +142,19 @@ def remoteFileList():
     except Exception as e:
         errorNotify(sys.exc_info()[1], e)
         return []
+
+
+def remoteCommand(cmd):
+    """run a command on the media server"""
+    try:
+        cfg = readConfig()
+        mhost = cfg["mediaserver"]["host"]
+        muser = cfg["mediaserver"]["user"]
+        mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
+        ckwargs = {"key_filename": mkeyfn}
+        with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
+            result = c.run(cmd, hide=True)
+            return result.stdout.strip()
+    except Exception as e:
+        errorNotify(sys.exc_info()[1], e)
+        return ""

@@ -1,5 +1,4 @@
 import os
-import sys
 import time
 from pathlib import Path
 from threading import Thread
@@ -8,7 +7,7 @@ import tstomkv
 from tstomkv import progressBar
 from tstomkv.config import readConfig
 from tstomkv.ffmpeg import convert_ts_to_mkv, videoDuration
-from tstomkv.files import getFile, remoteFileList
+from tstomkv.files import getFile, remoteCommand, remoteFileList, sendFile
 
 
 def transcodeFile(src, dst, statsfile, overwrite=False):
@@ -96,7 +95,14 @@ def main():
         fthread.join()
         sthread.join()
         print(f"Transcoding and stats monitoring complete for {Path(tdest).name}")
-        sys.exit(0)
+        dest = tdest.replace(
+            cfg["DEFAULT"]["transcodedir"], cfg["mediaserver"]["koditvdir"]
+        )
+        if not sendFile(tdest, dest, banner=True):
+            raise Exception(f"Failed to send {tdest} to {dest}")
+        res = remoteCommand(f"rm '{src}'")
+        if res != "":
+            raise Exception(f"Failed to remove remote file {src}")
 
 
 if __name__ == "__main__":
