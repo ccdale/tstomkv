@@ -88,7 +88,7 @@ def getFile(src, dst, banner=False):
         mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
         ckwargs = {"key_filename": mkeyfn}
         if banner:
-            print(f"Retrieving {dst} from {mhost}:{src}")
+            print(f"Retrieving {dst} from {mhost}:{src}", flush=True)
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
             c.get(src, dst)
         return True
@@ -134,7 +134,7 @@ def remoteFileList():
         muser = cfg["mediaserver"]["user"]
         mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
         ckwargs = {"key_filename": mkeyfn}
-        findcmd = f"find {cfg['mediaserver']['koditvdir']} {cfg['mediaserver']['kodifilmdir']} -name \\*ts"
+        findcmd = f"find {cfg['mediaserver']['koditvdir']} {cfg['mediaserver']['kodifilmdir']} -name \\*.ts"
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
             result = c.run(findcmd, hide=True)
             files = result.stdout.strip().split("\n")
@@ -144,7 +144,7 @@ def remoteFileList():
         return []
 
 
-def remoteCommand(cmd):
+def remoteCommand(cmd, banner=False):
     """run a command on the media server"""
     try:
         cfg = readConfig()
@@ -152,6 +152,8 @@ def remoteCommand(cmd):
         muser = cfg["mediaserver"]["user"]
         mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
         ckwargs = {"key_filename": mkeyfn}
+        if banner:
+            print(f"Running remote command on {mhost}: {cmd}", flush=True)
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
             result = c.run(cmd, hide=True)
             return result.stdout.strip()

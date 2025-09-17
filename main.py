@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from pathlib import Path
 from threading import Thread
@@ -60,7 +61,15 @@ def main():
     cfg = readConfig()
     files = remoteFileList()
     print(f"{len(files)} Remote files")
+    if len(sys.argv) > 1:
+        skip = int(sys.argv[1])
     for src in files:
+        isfilm = False
+        if len(sys.argv) > 1:
+            if skip > 0:
+                print(f"Skipping {src}")
+                skip -= 1
+                continue
         stopfn = "/".join([cfg["DEFAULT"]["transcodedir"], "STOP"])
         if Path(stopfn).exists() is True:
             raise Exception("STOP file found, exiting")
@@ -70,6 +79,7 @@ def main():
             )
             destdir = Path(dest).parent
         elif cfg["mediaserver"].get("kodifilmdir") in src:
+            isfilm = True
             dest = src.replace(
                 cfg["mediaserver"]["kodifilmdir"], cfg["DEFAULT"]["transcodedir"]
             )
@@ -96,9 +106,15 @@ def main():
         fthread.join()
         sthread.join()
         print(f"Transcoding and stats monitoring complete for {Path(tdest).name}")
-        dest = tdest.replace(
-            cfg["DEFAULT"]["transcodedir"], cfg["mediaserver"]["koditvdir"]
-        )
+        if isfilm:
+            # move the file to the film directory
+            dest = tdest.replace(
+                cfg["DEFAULT"]["transcodedir"], cfg["mediaserver"]["kodifilmdir"]
+            )
+        else:
+            dest = tdest.replace(
+                cfg["DEFAULT"]["transcodedir"], cfg["mediaserver"]["koditvdir"]
+            )
         if not sendFile(tdest, dest, banner=True):
             raise Exception(f"Failed to send {tdest} to {dest}")
         res = remoteCommand(f"rm '{src}'")
