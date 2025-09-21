@@ -24,6 +24,9 @@ def cleanTitle(title):
     try:
         xt = cleanStringStart(title, remove="new:")
         xt = cleanStringStart(xt, remove="live:")
+        # if the prefixes are the other way round that'll fail, so do it again in a the other order
+        xt = cleanStringStart(xt, remove="live:")
+        xt = cleanStringStart(xt, remove="new:")
         return xt
     except Exception as e:
         errorNotify(sys.exc_info()[2], e)
