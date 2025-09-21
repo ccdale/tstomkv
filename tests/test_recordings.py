@@ -1,10 +1,8 @@
-import sys
-import time
 from unittest import mock
 
 import pytest
 
-sys.path.insert(0, sys.path[0] + "/../src")
+# sys.path.insert(0, sys.path[0] + "/../src")
 from tstomkv import recordings
 
 

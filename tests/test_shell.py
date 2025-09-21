@@ -1,10 +1,7 @@
-import os
-import sys
 from unittest import mock
 
 import pytest
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 from tstomkv import shell
 
 
