@@ -87,10 +87,12 @@ def main():
         else:
             print(f"Skipping {src} as not in tvdir or filmdir")
             continue
-
+        starttime = time.time()
         destdir.mkdir(mode=0o755, exist_ok=True, parents=True)
-        if not getFile(src, dest):
+        if not getFile(src, dest, banner=True):
             raise Exception(f"Failed to copy {src} to {dest}")
+        endtime = time.time()
+        print(f"Time taken to copy {src} to {dest}: {humanTime(endtime - starttime)}")
         tsrc = dest
         tdest = dest.replace(".ts", ".mkv")
         vduration = videoDuration(tsrc)
@@ -106,6 +108,8 @@ def main():
         fthread.join()
         sthread.join()
         print(f"Transcoding and stats monitoring complete for {Path(tdest).name}")
+        nexttime = time.time()
+        print(f"time taken: {humanTime(nexttime - endtime)}")
         if isfilm:
             # move the file to the film directory
             dest = tdest.replace(
@@ -117,9 +121,23 @@ def main():
             )
         if not sendFile(tdest, dest, banner=True):
             raise Exception(f"Failed to send {tdest} to {dest}")
-        res = remoteCommand(f"rm '{src}'")
+        print(f"time taken to send file: {humanTime(time.time() - nexttime)}")
+        res = remoteCommand(f"rm '{src}'", banner=True)
         if res != "":
             raise Exception(f"Failed to remove remote file {src}")
+        print(f"process time for {src}: {humanTime(time.time() - starttime)}")
+
+
+def humanTime(seconds):
+    """convert seconds to human readable time"""
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    if h > 0:
+        return f"{int(h)}h {int(m)}m {int(s)}s"
+    elif m > 0:
+        return f"{int(m)}m {int(s)}s"
+    else:
+        return f"{int(s)}s"
 
 
 if __name__ == "__main__":
