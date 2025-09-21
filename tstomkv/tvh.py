@@ -1,28 +1,12 @@
-#
-# Copyright (c) 2023, Chris Allison
-#
-#     This file is part of tvhtokodi.
-#
-#     tvhtokodi is free software: you can redistribute it and/or modify
-#     it under the terms of the GNU General Public License as published by
-#     the Free Software Foundation, either version 3 of the License, or
-#     (at your option) any later version.
-#
-#     tvhtokodi is distributed in the hope that it will be useful,
-#     but WITHOUT ANY WARRANTY; without even the implied warranty of
-#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#     GNU General Public License for more details.
-#
-#     You should have received a copy of the GNU General Public License
-#     along with tvhtokodi.  If not, see <http://www.gnu.org/licenses/>.
-#
-"""tvh module for tvhtokodi"""
+"""tvh module for tstomkv"""
 
+import json
 import sys
 
 import requests
 
-from tstomkv import errorExit, errorNotify, errorRaise
+from tstomkv import errorNotify
+from tstomkv.config import readConfig
 
 
 class TVHError(Exception):
@@ -32,18 +16,19 @@ class TVHError(Exception):
 def sendToTvh(route, data=None):
     """Send a request to tvheadend"""
     try:
-        auth = (tvhtokodi.cfg["tvhuser"], tvhtokodi.cfg["tvhpass"])
-        url = f"http://{tvhtokodi.cfg['tvhipaddr']}/api/{route}"
+        cfg = readConfig()
+        auth = (cfg["DEFAULT"]["tvhuser"], cfg["DEFAULT"]["tvhpass"])
+        url = f"http://{cfg['DEFAULT']['tvhipaddr']}/api/{route}"
         r = requests.get(url, params=data, auth=auth)
         if r.status_code != 200:
             raise TVHError(f"error communicating with tvh: {r}")
         return r.json()
     except Exception as e:
         try:
-            print("Error decoding json from tvh, trying again")
+            print(f"Error decoding json from tvh, trying again\n{e}")
             txt = r.text.replace(chr(25), " ")
             return json.loads(txt)
-        except Exception as xe:
+        except Exception as e:
             errorNotify(sys.exc_info()[2], e)
 
 
@@ -61,5 +46,13 @@ def deleteRecording(uuid):
     try:
         data = {"uuid": uuid}
         sendToTvh("dvr/entry/remove", data)
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
+
+
+def fileMoved(src, dst):
+    try:
+        data = {"src": src, "dst": dst}
+        sendToTvh("dvr/entry/filemoved", data)
     except Exception as e:
         errorNotify(sys.exc_info()[2], e)
