@@ -14,7 +14,7 @@ def test_convert_ts_to_mkv_valid(capsys):
         )
         ffmpeg.convert_ts_to_mkv("input.ts", "output.mkv", "stats.txt")
         out = capsys.readouterr().out
-        assert "Converting input.ts to output.mkv" in out
+        assert "Transcoding input.ts to output.mkv" in out
         mrun.assert_called()
         args = mrun.call_args[0][0]
         assert "-progress" in args and "stats.txt" in args
