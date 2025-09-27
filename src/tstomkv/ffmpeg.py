@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from tstomkv import errorRaise
+from tstomkv.shell import shellCommand
 
 
 def convert_ts_to_mkv(
@@ -56,14 +57,9 @@ def convert_ts_to_mkv(
             "128k",
             "-c:s",
             "copy",
-            # "-map",
-            # "0",
             output_file,
         ]
-        proc = subprocess.run(cmd)
-        if proc.returncode != 0:
-            estr = f"ffmpeg failed with return code {proc.returncode}"
-            raise RuntimeError(estr)
+        _, _ = shellCommand(cmd, canfail=True)
         print(f"Conversion complete: {output_file}")
     except Exception as e:
         errorRaise(sys.exc_info()[2], e)
