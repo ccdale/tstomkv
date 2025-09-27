@@ -10,7 +10,7 @@ import tstomkv.ffmpeg as ffmpeg
 def test_convert_ts_to_mkv_valid(capsys):
     with mock.patch("subprocess.run") as mrun:
         mrun.return_value = types.SimpleNamespace(
-            returncode=0, raise_for_status=lambda: None
+            returncode=0, raise_for_status=lambda: None, stdout="ok", stderr=""
         )
         ffmpeg.convert_ts_to_mkv("input.ts", "output.mkv", "stats.txt")
         out = capsys.readouterr().out

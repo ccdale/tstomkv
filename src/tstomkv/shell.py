@@ -53,14 +53,17 @@ def shellCommand(cmd, canfail=False):
         if not canfail:
             # raise an exception if cmd returns an error code
             ret.check_returncode()
-        return (ret.stdout, ret.stderr)
+        if ret.returncode == 0:
+            return (ret.stdout, ret.stderr)
+        else:
+            return None
     except CalledProcessError as e:
         msg = f"ERROR: {ret.stderr}\nstdout: {ret.stdout}"
         msg += f"\nCommand was:\n' '.join{cmd}"
         print(msg)
         errorRaise(sys.exc_info()[2], e)
     except Exception as e:
-        msg = f"ERROR: {ret.stderr}\nstdout: {ret.stdout}"
+        msg = f"ERROR: {e}"
         msg += f"\nCommand was:\n' '.join{cmd}"
         print(msg)
         errorRaise(sys.exc_info()[2], e)

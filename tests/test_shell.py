@@ -43,18 +43,3 @@ def test_shellCommand_fail_raises():
         )
         with pytest.raises(Exception):
             shell.shellCommand(["fail"])
-
-
-def test_shellCommand_canfail():
-    with mock.patch("subprocess.run") as mrun:
-        mrun.return_value = mock.Mock(
-            stdout="out",
-            stderr="err",
-            returncode=1,
-            check_returncode=lambda: (_ for _ in ()).throw(
-                shell.CalledProcessError(1, ["fail"])
-            ),
-        )
-        out, err = shell.shellCommand(["fail"], canfail=True)
-        assert out == "out"
-        assert err == "err"

@@ -9,7 +9,9 @@ from tstomkv import progressBar
 from tstomkv.config import readConfig
 from tstomkv.ffmpeg import convert_ts_to_mkv, videoDuration
 from tstomkv.files import getFile, remoteCommand, remoteFileList, sendFile
+from tstomkv.paths import pathManipulation, stopNow
 from tstomkv.recordings import recordedTitles
+from tstomkv.tvh import fileMoved
 
 
 def transcodeFile(src, dst, statsfile, overwrite=False):
@@ -148,29 +150,24 @@ def tvhmkv():
         cfg = readConfig()
         recs, titles = recordedTitles()
         print(f"{len(recs)} recordings found")
-        for title in titles.keys():
-            if title == "Look At Life Island  at the Crossroads":
-                src = titles[title][0]["filename"]
-                stopfn = "/".join([cfg["DEFAULT"]["transcodedir"], "STOP"])
-                if Path(stopfn).exists() is True:
+        for title in titles:
+            for rec in titles[title]:
+                fps = pathManipulation(
+                    rec["filename"], replace="/var/lib/tvheadend", mkdestdir=True
+                )
+                if stopNow():
                     raise Exception("STOP file found, exiting")
-                dest = src.replace("/var/lib/tvheadend", cfg["DEFAULT"]["transcodedir"])
-                destdir = Path(dest).parent
-                starttime = time.time()
-                destdir.mkdir(mode=0o755, exist_ok=True, parents=True)
-                if not getFile(src, dest, banner=True):
-                    raise Exception(f"Failed to copy {src} to {dest}")
+                if not getFile(fps["src"], fps["dest"], banner=True):
+                    raise Exception(f"Failed to copy {fps['src']} to {fps['dest']}")
                 endtime = time.time()
                 print(
-                    f"Time taken to copy {src} to {dest}: {humanTime(endtime - starttime)}"
+                    f"Time taken to copy {fps['src']} to {fps['dest']}: {humanTime(endtime - starttime)}"
                 )
-                tsrc = dest
-                tdest = dest.replace(".ts", ".mkv")
-                vduration = videoDuration(tsrc)
-                statsfile = str(tsrc) + "-transcode.stats"
+                vduration = videoDuration(fps["dest"])
+                statsfile = str(fps["dest"]) + "-transcode.stats"
                 fthread = Thread(
                     target=transcodeFile,
-                    args=(tsrc, tdest, statsfile),
+                    args=(fps["dest"], fps["destmkv"], statsfile),
                     kwargs={"overwrite": True},
                 )
                 sthread = Thread(target=doStats, args=(statsfile, vduration))
@@ -179,8 +176,11 @@ def tvhmkv():
                 fthread.join()
                 sthread.join()
                 print(
-                    f"Transcoding and stats monitoring complete for {Path(tdest).name}"
+                    f"Transcoding and stats monitoring complete for {Path(fps["dest"]).name}"
                 )
+                sendFile(fps["destmkv"], fps["srcmkv"], banner=True)
+                fileMoved(fps["src"], fps["srcmkv"])
+                remoteCommand(f"rm '{fps['src']}'", banner=True)
                 nexttime = time.time()
                 print(f"time taken: {humanTime(nexttime - endtime)}")
     except Exception as e:
