@@ -56,8 +56,8 @@ def convert_ts_to_mkv(
             "128k",
             "-c:s",
             "copy",
-            "-map",
-            "0",
+            # "-map",
+            # "0",
             output_file,
         ]
         proc = subprocess.run(cmd)
