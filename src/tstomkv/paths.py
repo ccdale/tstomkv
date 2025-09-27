@@ -13,8 +13,8 @@ def pathManipulation(src, replace="/var/lib/tvheadend", mkdestdir=True):
         op["srcmkv"] = op["src"].with_suffix(".mkv")
         op["srcdir"] = op["src"].parent
         op["dest"] = Path(src.replace(replace, cfg["DEFAULT"]["transcodedir"]))
-        op["destmkv"] = op["dest"].with_suffix(".mkv")
         op["destdir"] = op["dest"].parent
+        op["destmkv"] = op["dest"].with_suffix(".mkv")
         if mkdestdir:
             op["destdir"].mkdir(mode=0o755, exist_ok=True, parents=True)
         return op

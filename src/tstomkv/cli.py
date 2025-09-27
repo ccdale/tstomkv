@@ -147,7 +147,6 @@ def tvhmkv():
     """Entry point for tvhmkv script"""
     try:
         print(f"Starting tvhmkv {tstomkv.getVersion()}")
-        cfg = readConfig()
         recs, titles = recordedTitles()
         print(f"{len(recs)} recordings found")
         for title in titles:
@@ -157,6 +156,7 @@ def tvhmkv():
                 )
                 if stopNow():
                     raise Exception("STOP file found, exiting")
+                starttime = time.time()
                 if not getFile(fps["src"], fps["dest"], banner=True):
                     raise Exception(f"Failed to copy {fps['src']} to {fps['dest']}")
                 endtime = time.time()
