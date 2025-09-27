@@ -9,6 +9,7 @@ from tstomkv import progressBar
 from tstomkv.config import readConfig
 from tstomkv.ffmpeg import convert_ts_to_mkv, videoDuration
 from tstomkv.files import getFile, remoteCommand, remoteFileList, sendFile
+from tstomkv.recordings import recordedTitles
 
 
 def transcodeFile(src, dst, statsfile, overwrite=False):
@@ -140,5 +141,52 @@ def humanTime(seconds):
         return f"{int(s)}s"
 
 
+def tvhmkv():
+    """Entry point for tvhmkv script"""
+    try:
+        print(f"Starting tvhmkv {tstomkv.getVersion()}")
+        cfg = readConfig()
+        recs, titles = recordedTitles()
+        print(f"{len(recs)} recordings found")
+        for title in titles.keys():
+            if title == "Look At Life Island  at the Crossroads":
+                src = titles[title][0]["filename"]
+                stopfn = "/".join([cfg["DEFAULT"]["transcodedir"], "STOP"])
+                if Path(stopfn).exists() is True:
+                    raise Exception("STOP file found, exiting")
+                dest = src.replace("/var/lib/tvheadend", cfg["DEFAULT"]["transcodedir"])
+                destdir = Path(dest).parent
+                starttime = time.time()
+                destdir.mkdir(mode=0o755, exist_ok=True, parents=True)
+                if not getFile(src, dest, banner=True):
+                    raise Exception(f"Failed to copy {src} to {dest}")
+                endtime = time.time()
+                print(
+                    f"Time taken to copy {src} to {dest}: {humanTime(endtime - starttime)}"
+                )
+                tsrc = dest
+                tdest = dest.replace(".ts", ".mkv")
+                vduration = videoDuration(tsrc)
+                statsfile = str(tsrc) + "-transcode.stats"
+                fthread = Thread(
+                    target=transcodeFile,
+                    args=(tsrc, tdest, statsfile),
+                    kwargs={"overwrite": True},
+                )
+                sthread = Thread(target=doStats, args=(statsfile, vduration))
+                fthread.start()
+                sthread.start()
+                fthread.join()
+                sthread.join()
+                print(
+                    f"Transcoding and stats monitoring complete for {Path(tdest).name}"
+                )
+                nexttime = time.time()
+                print(f"time taken: {humanTime(nexttime - endtime)}")
+    except Exception as e:
+        tstomkv.errorRaise(f"tvhmkv failed: {e}")
+
+
 if __name__ == "__main__":
+    # tvhmkv()
     main()
