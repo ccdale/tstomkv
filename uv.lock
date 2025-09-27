@@ -429,8 +429,8 @@ wheels = [
 
 [[package]]
 name = "tstomkv"
-version = "0.2.0"
-source = { virtual = "." }
+version = "0.2.1"
+source = { editable = "." }
 dependencies = [
     { name = "fabric" },
     { name = "requests" },
