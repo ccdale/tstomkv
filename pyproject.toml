@@ -15,3 +15,7 @@ dev = [
     "pytest>=8.4.2",
     "types-toml>=0.10.8.20240310",
 ]
+
+[project.scripts]
+kodimkv = "tstomkv.cli:kodimkv"
+tvhmkv = "tstomkv.cli:tvhmkv"
