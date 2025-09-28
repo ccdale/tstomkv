@@ -8,8 +8,14 @@ import tstomkv
 from tstomkv import progressBar
 from tstomkv.config import readConfig
 from tstomkv.ffmpeg import checkPercentDuration, convert_ts_to_mkv, videoDuration
-from tstomkv.files import getFile, remoteCommand, remoteFileList, sendFile
-from tstomkv.paths import pathManipulation, stopNow
+from tstomkv.files import (
+    getFile,
+    pathManipulation,
+    remoteCommand,
+    remoteFileList,
+    sendFile,
+    stopNow,
+)
 from tstomkv.recordings import recordedTitles
 from tstomkv.tvh import fileMoved
 
@@ -151,14 +157,14 @@ def tvhmkv():
         print(f"{len(recs)} recordings found")
         for title in titles:
             for rec in titles[title]:
+                if stopNow():
+                    raise Exception("STOP file found, exiting")
                 if not rec["filename"].lower().endswith(".ts"):
                     print(f"Skipping {rec['filename']} as not a .ts file")
                     continue
                 fps = pathManipulation(
                     rec["filename"], replace="/var/lib/tvheadend", mkdestdir=True
                 )
-                if stopNow():
-                    raise Exception("STOP file found, exiting")
                 starttime = time.time()
                 if not getFile(str(fps["src"]), str(fps["dest"]), banner=True):
                     raise Exception(f"Failed to copy {fps['src']} to {fps['dest']}")
