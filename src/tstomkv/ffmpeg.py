@@ -141,3 +141,17 @@ def videoDuration(fqfn):
     except Exception as e:
         errorRaise(sys.exc_info()[2], e)
         return None
+
+
+def checkPercentDuration(fn1, fn2, threshold=0.9):
+    """Check that the duration of fn2 is at least threshold percent of fn1"""
+    try:
+        dur1 = videoDuration(fn1)
+        dur2 = videoDuration(fn2)
+        if dur1 and dur2:
+            if dur2 >= (dur1 * threshold):
+                return True
+        return False
+    except Exception as e:
+        errorRaise(sys.exc_info()[2], e)
+        return False

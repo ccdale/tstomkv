@@ -7,7 +7,7 @@ from threading import Thread
 import tstomkv
 from tstomkv import progressBar
 from tstomkv.config import readConfig
-from tstomkv.ffmpeg import convert_ts_to_mkv, videoDuration
+from tstomkv.ffmpeg import checkPercentDuration, convert_ts_to_mkv, videoDuration
 from tstomkv.files import getFile, remoteCommand, remoteFileList, sendFile
 from tstomkv.paths import pathManipulation, stopNow
 from tstomkv.recordings import recordedTitles
@@ -151,13 +151,16 @@ def tvhmkv():
         print(f"{len(recs)} recordings found")
         for title in titles:
             for rec in titles[title]:
+                if not rec["filename"].lower().endswith(".ts"):
+                    print(f"Skipping {rec['filename']} as not a .ts file")
+                    continue
                 fps = pathManipulation(
                     rec["filename"], replace="/var/lib/tvheadend", mkdestdir=True
                 )
                 if stopNow():
                     raise Exception("STOP file found, exiting")
                 starttime = time.time()
-                if not getFile(fps["src"], fps["dest"], banner=True):
+                if not getFile(str(fps["src"]), str(fps["dest"]), banner=True):
                     raise Exception(f"Failed to copy {fps['src']} to {fps['dest']}")
                 endtime = time.time()
                 print(
@@ -167,7 +170,7 @@ def tvhmkv():
                 statsfile = str(fps["dest"]) + "-transcode.stats"
                 fthread = Thread(
                     target=transcodeFile,
-                    args=(fps["dest"], fps["destmkv"], statsfile),
+                    args=(str(fps["dest"]), str(fps["destmkv"]), statsfile),
                     kwargs={"overwrite": True},
                 )
                 sthread = Thread(target=doStats, args=(statsfile, vduration))
@@ -178,9 +181,11 @@ def tvhmkv():
                 print(
                     f"Transcoding and stats monitoring complete for {Path(fps["dest"]).name}"
                 )
-                sendFile(fps["destmkv"], fps["srcmkv"], banner=True)
-                fileMoved(fps["src"], fps["srcmkv"])
-                remoteCommand(f"rm '{fps['src']}'", banner=True)
+                if checkPercentDuration(fps["dest"], fps["destmkv"]):
+                    print("Duration check OK")
+                    sendFile(str(fps["destmkv"]), str(fps["srcmkv"]), banner=True)
+                    fileMoved(str(fps["src"]), str(fps["srcmkv"]))
+                    remoteCommand(f"rm '{str(fps['src'])}'", banner=True)
                 nexttime = time.time()
                 print(f"time taken: {humanTime(nexttime - endtime)}")
     except Exception as e:
