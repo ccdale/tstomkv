@@ -166,14 +166,15 @@ def tvhmkv():
                 print(
                     f"Time taken to copy {fps['src']} to {fps['dest']}: {humanTime(endtime - starttime)}"
                 )
-                vduration = videoDuration(fps["dest"])
                 statsfile = str(fps["dest"]) + "-transcode.stats"
                 fthread = Thread(
                     target=transcodeFile,
                     args=(str(fps["dest"]), str(fps["destmkv"]), statsfile),
                     kwargs={"overwrite": True},
                 )
-                sthread = Thread(target=doStats, args=(statsfile, vduration))
+                sthread = Thread(
+                    target=doStats, args=(statsfile, videoDuration(fps["dest"]))
+                )
                 fthread.start()
                 sthread.start()
                 fthread.join()
