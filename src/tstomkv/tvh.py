@@ -5,7 +5,7 @@ import sys
 
 import requests
 
-from tstomkv import errorNotify
+from tstomkv import errorNotify, errorRaise
 from tstomkv.config import readConfig
 
 
@@ -29,7 +29,7 @@ def sendToTvh(route, data=None):
             txt = r.text.replace(chr(25), " ")
             return json.loads(txt)
         except Exception as e:
-            errorNotify(sys.exc_info()[2], e)
+            errorRaise(sys.exc_info()[2], e)
 
 
 def allRecordings():
@@ -47,7 +47,7 @@ def deleteRecording(uuid):
         data = {"uuid": uuid}
         sendToTvh("dvr/entry/remove", data)
     except Exception as e:
-        errorNotify(sys.exc_info()[2], e)
+        errorRaise(sys.exc_info()[2], e)
 
 
 def fileMoved(src, dst):
@@ -55,4 +55,4 @@ def fileMoved(src, dst):
         data = {"src": src, "dst": dst}
         sendToTvh("dvr/entry/filemoved", data)
     except Exception as e:
-        errorNotify(sys.exc_info()[2], e)
+        errorRaise(sys.exc_info()[2], e)

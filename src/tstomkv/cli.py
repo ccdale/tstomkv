@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import Thread
 
 import tstomkv
-from tstomkv import progressBar
+from tstomkv import errorNotify, progressBar
 from tstomkv.config import readConfig
 from tstomkv.ffmpeg import checkPercentDuration, convert_ts_to_mkv, videoDuration
 from tstomkv.files import (
@@ -17,14 +17,16 @@ from tstomkv.files import (
     stopNow,
 )
 from tstomkv.recordings import recordedTitles
+from tstomkv.transcoding import transcodeFile
 from tstomkv.tvh import fileMoved
 
 
-def transcodeFile(src, dst, statsfile, overwrite=False):
-    """Initiate the transcoder for a given source file to a destination file"""
-    dirname = os.path.dirname(dst)
-    Path(dirname).mkdir(mode=0o755, exist_ok=True, parents=True)
-    return convert_ts_to_mkv(src, dst, statsfile, overwrite=overwrite)
+class StopAll(Exception):
+    pass
+
+
+class CopyError(Exception):
+    pass
 
 
 def doStats(statsfile, duration):
@@ -81,7 +83,7 @@ def kodimkv():
                 continue
         stopfn = "/".join([cfg["DEFAULT"]["transcodedir"], "STOP"])
         if Path(stopfn).exists() is True:
-            raise Exception("STOP file found, exiting")
+            raise StopAll("STOP file found, exiting")
         if cfg["mediaserver"].get("koditvdir") in src:
             dest = src.replace(
                 cfg["mediaserver"]["koditvdir"], cfg["DEFAULT"]["transcodedir"]
@@ -158,16 +160,16 @@ def tvhmkv():
         for title in titles:
             for rec in titles[title]:
                 if stopNow():
-                    raise Exception("STOP file found, exiting")
+                    raise StopAll("STOP file found, exiting")
                 if not rec["filename"].lower().endswith(".ts"):
-                    print(f"Skipping {rec['filename']} as not a .ts file")
+                    print(f"Skipping {rec['filename']}")
                     continue
                 fps = pathManipulation(
                     rec["filename"], replace="/var/lib/tvheadend", mkdestdir=True
                 )
                 starttime = time.time()
                 if not getFile(str(fps["src"]), str(fps["dest"]), banner=True):
-                    raise Exception(f"Failed to copy {fps['src']} to {fps['dest']}")
+                    raise CopyError(f"Failed to copy {fps['src']} to {fps['dest']}")
                 endtime = time.time()
                 print(
                     f"Time taken to copy {fps['src']} to {fps['dest']}: {humanTime(endtime - starttime)}"
@@ -195,5 +197,12 @@ def tvhmkv():
                     remoteCommand(f"rm '{str(fps['src'])}'", banner=True)
                 nexttime = time.time()
                 print(f"time taken: {humanTime(nexttime - endtime)}")
+    except StopAll as e:
+        errorNotify(sys.exc_info()[2], e)
+        sys.exit(0)
+    except CopyError as e:
+        errorNotify(sys.exc_info()[2], e)
+        sys.exit(1)
     except Exception as e:
-        tstomkv.errorRaise(f"tvhmkv failed: {e}")
+        errorNotify(sys.exc_info()[2], e)
+        sys.exit(1)
