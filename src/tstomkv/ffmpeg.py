@@ -131,12 +131,16 @@ def videoDuration(fqfn):
     """use ffprobe. returns duration in seconds or None."""
     try:
         finfo = fileInfo(fqfn)
+        # print(finfo)
         if finfo and "streams" in finfo:
             for stream in finfo["streams"]:
-                if "codec_type" in stream and stream["codec_type"] == "video":
-                    if "duration" in stream:
-                        # no need to be exact, just return int seconds
-                        return int(float(stream["duration"]))
+                # if "codec_type" in stream and stream["codec_type"] == "video":
+                # look for any stream with a duration
+                # after encoding to mkv, it would appear that only the subtitle
+                # stream has a duration, so don't check codec_type
+                if "duration" in stream:
+                    # no need to be exact, just return int seconds
+                    return int(float(stream["duration"]))
         return None
     except Exception as e:
         errorRaise(sys.exc_info()[2], e)
@@ -147,7 +151,10 @@ def checkPercentDuration(fn1, fn2, threshold=0.9):
     """Check that the duration of fn2 is at least threshold percent of fn1"""
     try:
         dur1 = videoDuration(fn1)
+        print(f"Duration of {fn1} is {dur1} seconds")
         dur2 = videoDuration(fn2)
+        print(f"Duration of {fn2} is {dur2} seconds")
+        print(f"threshold is {dur1 * threshold} seconds")
         if dur1 and dur2:
             if dur2 >= (dur1 * threshold):
                 return True

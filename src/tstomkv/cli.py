@@ -201,6 +201,9 @@ def tvhmkv():
                     sendFile(str(fps["destmkv"]), str(fps["srcmkv"]), banner=True)
                     fileMoved(str(fps["src"]), str(fps["srcmkv"]))
                     remoteCommand(f"rm '{str(fps['src'])}'", banner=True)
+                else:
+                    print("Duration check FAILED, not moving file or deleting source")
+                    raise CopyError("Duration check failed")
                 nexttime = time.time()
                 print(f"time taken: {humanTime(nexttime - endtime)}")
     except StopAll as e:
