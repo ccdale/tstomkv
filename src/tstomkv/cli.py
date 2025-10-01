@@ -17,7 +17,6 @@ from tstomkv.files import (
     stopNow,
 )
 from tstomkv.recordings import recordedTitles
-from tstomkv.transcoding import transcodeFile
 from tstomkv.tvh import fileMoved
 
 
@@ -27,6 +26,13 @@ class StopAll(Exception):
 
 class CopyError(Exception):
     pass
+
+
+def transcodeFile(src, dst, statsfile, overwrite=False):
+    """Initiate the transcoder for a given source file to a destination file"""
+    dirname = os.path.dirname(dst)
+    Path(dirname).mkdir(mode=0o755, exist_ok=True, parents=True)
+    return convert_ts_to_mkv(src, dst, statsfile, overwrite=overwrite)
 
 
 def doStats(statsfile, duration):
