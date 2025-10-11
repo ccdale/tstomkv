@@ -105,3 +105,24 @@ def recordedTitles():
         return recs, titles
     except Exception as e:
         errorNotify(sys.exc_info()[2], e)
+
+
+def filteredTitles(filetype=".ts"):
+    """Obtain all recorded titles as a dictionary of lists of those recordings."""  # noqa: E501
+    try:
+        recs, tot = allRecordings()
+        titles = {}
+        tsrecs = []
+        for rec in recs:
+            if not rec["filename"].lower().endswith(filetype.lower()):
+                # print(f"Skipping {rec['filename']}")
+                continue
+            show = tidyRecording(rec)
+            tsrecs.append(rec)
+            if not show["filename"].startswith("/var/lib/tvheadend/radio"):
+                if show["title"] not in titles:
+                    titles[show["title"]] = []
+                titles[show["title"]].append(show)
+        return tsrecs, titles
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
