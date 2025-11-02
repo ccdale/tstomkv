@@ -16,7 +16,7 @@ from tstomkv.files import (
     sendFile,
     stopNow,
 )
-from tstomkv.recordings import filteredTitles, recordedTitles
+from tstomkv.recordings import filteredTitles  # , recordedTitles
 from tstomkv.tvh import fileMoved
 
 

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+echo "writing STOP file"
+touch ~/tmp/transcode/STOP

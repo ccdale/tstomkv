@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# is this a symlink?
+if ! link=$(readlink $0); then
+    # no, it's not a symlink
+    link=$0
+fi
+
+# cd to the directory of the script
+cd $(dirname $link)
+
+# find the root of the repo this script is in
+gitroot=$(git rev-parse --show-toplevel 2>/dev/null);
+
+venvd=${gitroot}/.venv
+
+cd ${gitroot}
+
+if [ ! -d ${venvd} ]; then
+    echo "No virtual environment found at ${venvd}"
+    uv venv ${venvd}
+fi
+
+uv run tvhmkv
