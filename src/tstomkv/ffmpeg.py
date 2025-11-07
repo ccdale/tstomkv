@@ -10,6 +10,21 @@ from tstomkv import errorRaise
 from tstomkv.shell import shellCommand
 
 
+def detectH264(input_file: str) -> bool:
+    """Detect if the input file contains H.264 video stream."""
+    try:
+        finfo = fileInfo(input_file)
+        if finfo and "streams" in finfo:
+            for stream in finfo["streams"]:
+                if "codec_type" in stream and stream["codec_type"] == "video":
+                    if "codec_name" in stream and stream["codec_name"] == "h264":
+                        return True
+        return False
+    except Exception as e:
+        errorRaise(sys.exc_info()[2], e)
+        return False
+
+
 def convert_ts_to_mkv(
     input_file: str, output_file: str, statsfile: str, overwrite=False
 ):
@@ -35,6 +50,8 @@ def convert_ts_to_mkv(
         # -c:a aac -b:a 128k - use aac encoding for audio at a bitrate of 128k
         # -c:s copy -map 0 - copy the dvb subtitles as is
         #     (which is why we have to use a matroska container)
+        #
+        # incoming ts with h264(freeview HD) video will be copied directly
 
         cmd = [
             "ffmpeg",
@@ -47,18 +64,25 @@ def convert_ts_to_mkv(
             "5",
             "-i",
             input_file,
-            "-c:v",
-            "libx265",
-            "-preset",
-            "medium",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "128k",
-            "-c:s",
-            "copy",
-            output_file,
         ]
+        if detectH264(input_file):
+            cmd.extend(["-c:v", "copy", "-c:a", "copy", "-c:s", "copy"])
+        else:
+            cmd.extend(
+                [
+                    "-c:v",
+                    "libx265",
+                    "-preset",
+                    "medium",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "128k",
+                    "-c:s",
+                    "copy",
+                ]
+            )
+        cmd.append(output_file)
         _, _ = shellCommand(cmd, canfail=True)
         print(f"Conversion complete: {output_file}")
     except Exception as e:
