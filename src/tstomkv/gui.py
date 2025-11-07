@@ -3,8 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 
 import tstomkv
-from tstomkv import errorNotify, progressBar
-from tstomkv.config import readConfig
+from tstomkv import errorNotify
 from tstomkv.recordings import filteredTitles
 
 
@@ -199,7 +198,7 @@ class TStoMKVGUI:
     def convert_selected(self):
         """Convert the selected recordings."""
         selected_items = self.checkbox_listbox.get_selected_items()
-        selected_indices = self.checkbox_listbox.get_selected_indices()
+        # selected_indices = self.checkbox_listbox.get_selected_indices()
 
         if not selected_items:
             self.status_label.config(text="No items selected")
