@@ -184,6 +184,37 @@ def remoteFileExists(fn):
         return False
 
 
+def remoteFinalFileName(src):
+    """ensure that the remote final file name does not exist, adding a suffix if needed"""
+    try:
+        cfg = readConfig()
+        mhost = cfg["mediaserver"]["host"]
+        muser = cfg["mediaserver"]["user"]
+        mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
+        ckwargs = {"key_filename": mkeyfn}
+        basedir = Path(src).parent
+        base_name = Path(src).stem
+        prefix = f"{basedir}/{base_name}" if basedir != "" else base_name
+        ext = Path(src).suffix
+        cn = 0
+        fexists = True
+        while fexists:
+            if cn == 0:
+                test_name = f"{prefix}{ext}"
+            else:
+                test_name = f"{prefix}-{cn}{ext}"
+            with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
+                result = c.run(checkcmd, hide=True)
+                if result.exited == 0:
+                    cn += 1
+                else:
+                    fexists = False
+                    return test_name
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
+        return src
+
+
 def pathManipulation(src, replace="/var/lib/tvheadend", mkdestdir=True):
     try:
         op = {}
