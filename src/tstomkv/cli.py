@@ -13,6 +13,7 @@ from tstomkv.files import (
     pathManipulation,
     remoteCommand,
     remoteFileList,
+    remoteFinalFileName,
     sendFile,
     stopNow,
 )
@@ -134,7 +135,8 @@ def kodimkv():
         )
         if checkPercentDuration(fps["dest"], fps["destmkv"]):
             print("Duration check OK")
-            sendFile(str(fps["destmkv"]), str(fps["srcmkv"]), banner=True)
+            finalfn = remoteFinalFileName(fps["destmkv"])
+            sendFile(str(fps["destmkv"]), finalfn, banner=True)
             # fileMoved(str(fps["src"]), str(fps["srcmkv"]))
             remoteCommand(f"rm \"{str(fps['src'])}\"", banner=True)
         else:
