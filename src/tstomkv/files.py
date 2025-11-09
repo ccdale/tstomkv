@@ -141,7 +141,7 @@ def remoteFileList():
             files = result.stdout.strip().split("\n")
             return files
     except Exception as e:
-        errorNotify(sys.exc_info()[1], e)
+        errorNotify(sys.exc_info()[2], e)
         return []
 
 
@@ -157,10 +157,31 @@ def remoteCommand(cmd, banner=False):
             print(f"Running remote command on {mhost}: {cmd}", flush=True)
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
             result = c.run(cmd, hide=True)
-            return result.stdout.strip()
+            if result.exited == 0:
+                return result.stdout.strip()
+            else:
+                return ""
     except Exception as e:
-        errorNotify(sys.exc_info()[1], e)
+        errorNotify(sys.exc_info()[2], e)
         return ""
+
+
+def remoteFileExists(fn):
+    """check if a file exists on the media server"""
+    try:
+        cfg = readConfig()
+        mhost = cfg["mediaserver"]["host"]
+        muser = cfg["mediaserver"]["user"]
+        mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
+        ckwargs = {"key_filename": mkeyfn}
+        checkcmd = f'test -f "{fn}"'
+        with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
+            result = c.run(checkcmd, hide=True)
+            return result.exited == 0
+        return False
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
+        return False
 
 
 def pathManipulation(src, replace="/var/lib/tvheadend", mkdestdir=True):
@@ -177,7 +198,7 @@ def pathManipulation(src, replace="/var/lib/tvheadend", mkdestdir=True):
             op["destdir"].mkdir(mode=0o755, exist_ok=True, parents=True)
         return op
     except Exception as e:
-        errorNotify(sys.exc_info()[1], e)
+        errorNotify(sys.exc_info()[2], e)
 
 
 def stopNow():
