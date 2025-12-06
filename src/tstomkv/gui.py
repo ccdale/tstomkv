@@ -9,7 +9,7 @@ from tstomkv import errorNotify
 from tstomkv.recordings import filteredTitles
 
 
-def runStatsGui(root: tk.Tk, statsfile: str, duration: int):
+def runStatsGui(title: str, statsfile: str, duration: int, root: tk.Tk):
     """Convert a file, putting the progress bar in this window."""
     childw = tk.Toplevel(root)
     childw.title("TS to MKV Converter")
@@ -37,7 +37,7 @@ def runStatsGui(root: tk.Tk, statsfile: str, duration: int):
 
     def update_progress():
         if pstats.exists():
-            plabel.config(text="Transcoding in progress...")
+            plabel.config(text=f"Transcoding of {title} in progress...")
             with open(pstats, "r") as sf:
                 stats = {}
                 lines = sf.readlines()
