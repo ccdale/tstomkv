@@ -26,7 +26,7 @@ def runStatsGui(root: tk.Tk, statsfile: str, duration: int):
 
     def waitForStatsFile():
         cn = 0
-        while pstats.exists() is False:
+        while not pstats.exists():
             childw.update()
             childw.after(holdoff * 1000)
             cn += 1
