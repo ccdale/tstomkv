@@ -203,6 +203,7 @@ def remoteFinalFileName(src):
                 test_name = f"{prefix}{ext}"
             else:
                 test_name = f"{prefix}-{cn}{ext}"
+            checkcmd = f'test -f "{test_name}"'
             with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
                 result = c.run(checkcmd, hide=True)
                 if result.exited == 0:

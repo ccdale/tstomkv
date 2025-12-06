@@ -26,6 +26,7 @@ def sendToTvh(route, data=None):
     except Exception as e:
         try:
             print(f"Error decoding json from tvh, trying again\n{e}")
+            print(f"Raw text:\n{r.text}")
             txt = r.text.replace(chr(25), " ")
             return json.loads(txt)
         except Exception as e:

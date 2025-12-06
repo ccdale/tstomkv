@@ -1,10 +1,65 @@
 import sys
 import tkinter as tk
+from pathlib import Path
+from threading import Thread
 from tkinter import ttk
 
 import tstomkv
 from tstomkv import errorNotify
 from tstomkv.recordings import filteredTitles
+
+
+def runStatsGui(root: tk.Tk, statsfile: str, duration: int):
+    """Convert a file, putting the progress bar in this window."""
+    childw = tk.Toplevel(root)
+    childw.title("TS to MKV Converter")
+    childw.geometry("400x200")
+    plabel = ttk.Label(childw, text="Waiting for stats file to appear ...")
+    plabel.pack(pady=10)
+    progressvar = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(
+        childw, variable=progressvar, mode="determinate", maximum=duration
+    )
+    progress_bar.pack(fill=tk.X, padx=10, pady=10)
+    holdoff = 5
+    pstats = Path(statsfile)
+
+    def waitForStatsFile():
+        cn = 0
+        while pstats.exists() is False:
+            childw.update()
+            childw.after(holdoff * 1000)
+            cn += 1
+            if cn > 12:
+                plabel.config(text="No stats file after 1 minute, giving up")
+                return False
+        return True
+
+    def update_progress():
+        if pstats.exists():
+            plabel.config(text="Transcoding in progress...")
+            with open(pstats, "r") as sf:
+                stats = {}
+                lines = sf.readlines()
+                for line in lines:
+                    if "=" in line:
+                        k, v = line.strip().split("=", 1)
+                        stats[k] = v
+                if "out_time_ms" in stats:
+                    try:
+                        elapsed = int(stats["out_time_ms"]) / 1_000_000
+                    except ValueError:
+                        elapsed = 0
+                    progressvar.set(elapsed)
+                if "progress" in stats:
+                    if stats["progress"] == "end":
+                        childw.destroy()
+        childw.after(holdoff * 1000, update_progress)
+
+    if not waitForStatsFile():
+        childw.destroy()
+        return
+    update_progress()
 
 
 class CheckboxListbox(tk.Frame):
@@ -158,6 +213,10 @@ class TStoMKVGUI:
             button_frame, text="Refresh List", command=self.refresh_recordings
         ).pack(side=tk.RIGHT, padx=5)
 
+        ttk.Button(button_frame, text="Quit", command=self.root.quit).pack(
+            side=tk.RIGHT, padx=5
+        )
+
     def load_recordings(self):
         """Load recordings from tstomkv."""
         try:
@@ -174,10 +233,9 @@ class TStoMKVGUI:
                 for rec in recordings:
                     filename = rec.get("filename", "Unknown")
                     self.recording_names.append(f"{title} - {filename}")
-
-            self.status_label.config(
-                text=f"Loaded {len(self.recording_names)} recordings"
-            )
+            cn = len(self.recording_names)
+            msg = f"Loaded {cn} recording{'s' if cn != 1 else ''}"
+            self.status_label.config(text=msg)
 
         except Exception as e:
             error_msg = f"Error loading recordings: {e}"
@@ -204,9 +262,9 @@ class TStoMKVGUI:
             self.status_label.config(text="No items selected")
             return
 
-        self.status_label.config(
-            text=f"Selected {len(selected_items)} recordings for conversion"
-        )
+        cn = len(selected_items)
+        msg = f"Converting {cn} recording{'s' if cn != 1 else ''}..."
+        self.status_label.config(text=msg)
 
         # Here you would implement the actual conversion logic
         # For now, just print the selected items
