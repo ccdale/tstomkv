@@ -115,6 +115,26 @@ def convertSize(sizebytes):
     return f"{sizebytes:.2f} PB"
 
 
+def remoteFileSize(fn):
+    """get the size of a file on the media server"""
+    try:
+        cfg = readConfig()
+        mhost = cfg["mediaserver"]["host"]
+        muser = cfg["mediaserver"]["user"]
+        mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
+        ckwargs = {"key_filename": mkeyfn}
+        checkcmd = f'stat -c%s "{fn}"'
+        with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
+            result = c.run(checkcmd, hide=True)
+            if result.exited == 0:
+                return int(result.stdout.strip())
+            else:
+                return -1
+    except Exception as e:
+        errorNotify(sys.exc_info()[2], e)
+        return -1
+
+
 def homeDir():
     try:
         return os.path.expandvars("$HOME")
