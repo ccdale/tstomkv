@@ -18,6 +18,7 @@
 #
 
 """subprocess commands to send via a shell."""
+import shlex
 import subprocess
 import sys
 from subprocess import CalledProcessError
@@ -34,7 +35,7 @@ def listCmd(cmd):
                     f"cmd should be list or string, you gave {type(cmd)} {cmd}"
                 )
             else:
-                cmd = cmd.strip().split(" ")
+                cmd = shlex.split(cmd.strip())
         return cmd
     except Exception as e:
         errorRaise(sys.exc_info()[2], e)
