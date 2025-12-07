@@ -106,7 +106,7 @@ def fileSize(fn):
         return -1
 
 
-def convertSize(sizebytes):
+def humanSize(sizebytes):
     """Convert bytes to human readable format."""
     for unit in ["B", "KB", "MB", "GB", "TB"]:
         if sizebytes < 1024:

@@ -1,6 +1,9 @@
+import os
 import sys
+from pathlib import Path
 
 from tstomkv import errorExit, errorNotify, errorRaise
+from tstomkv.ffmpeg import checkPercentDuration, convert_ts_to_mkv, videoDuration
 
 
 def transcodeFile(src, dst, statsfile, overwrite=False):

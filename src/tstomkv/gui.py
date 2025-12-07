@@ -6,8 +6,40 @@ from tkinter import ttk
 
 import tstomkv
 from tstomkv import errorNotify
-from tstomkv.files import pathManipulation
+from tstomkv.files import humanSize, pathManipulation
 from tstomkv.recordings import filteredTitles
+
+
+def monitorFileCopy(srcsize, dst, root: tk.Tk):
+    """Monitor the file copy progress, showing a progress bar in the given root window."""
+    childw = tk.Toplevel(root)
+    hsize = humanSize(srcsize)
+    childw.title("File Copy Progress")
+    childw.geometry("400x150")
+    plabel = ttk.Label(
+        childw, text=f"Copying {Path(dst).name} - {hsize} ({srcsize} bytes) ..."
+    )
+    plabel.pack(pady=10)
+    progressvar = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(
+        childw, variable=progressvar, mode="determinate", maximum=100
+    )
+    progress_bar.pack(fill=tk.X, padx=10, pady=10)
+
+    def update_progress():
+        try:
+            copied_size = Path(dst).stat().st_size if Path(dst).exists() else 0
+            progress = (copied_size / srcsize) * 100 if srcsize > 0 else 0
+            progressvar.set(progress)
+            if copied_size >= srcsize:
+                childw.destroy()
+            else:
+                childw.after(1000, update_progress)
+        except Exception as e:
+            errorNotify(sys.exc_info()[2], e)
+            childw.destroy()
+
+    update_progress()
 
 
 def runStatsGui(title: str, statsfile: str, duration: int, root: tk.Tk):
