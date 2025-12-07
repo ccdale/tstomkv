@@ -106,6 +106,15 @@ def fileSize(fn):
         return -1
 
 
+def convertSize(sizebytes):
+    """Convert bytes to human readable format."""
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if sizebytes < 1024:
+            return f"{sizebytes:.2f} {unit}"
+        sizebytes /= 1024
+    return f"{sizebytes:.2f} PB"
+
+
 def homeDir():
     try:
         return os.path.expandvars("$HOME")
