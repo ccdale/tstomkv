@@ -6,6 +6,7 @@ from tkinter import ttk
 
 import tstomkv
 from tstomkv import errorNotify
+from tstomkv.files import pathManipulation
 from tstomkv.recordings import filteredTitles
 
 
@@ -224,7 +225,7 @@ class TStoMKVGUI:
             self.root.update()
 
             recs, titles = filteredTitles()
-            self.recordings = recs
+            self.recordings = []
             self.titles = titles
 
             # Create a list of recording names for display
@@ -233,6 +234,7 @@ class TStoMKVGUI:
                 for rec in recordings:
                     filename = rec.get("filename", "Unknown")
                     self.recording_names.append(f"{title} - {filename}")
+                    self.recordings.append(rec)
             cn = len(self.recording_names)
             msg = f"Loaded {cn} recording{'s' if cn != 1 else ''}"
             self.status_label.config(text=msg)
@@ -256,21 +258,24 @@ class TStoMKVGUI:
     def convert_selected(self):
         """Convert the selected recordings."""
         selected_items = self.checkbox_listbox.get_selected_items()
-        # selected_indices = self.checkbox_listbox.get_selected_indices()
+        selected_indices = self.checkbox_listbox.get_selected_indices()
 
         if not selected_items:
             self.status_label.config(text="No items selected")
             return
 
-        cn = len(selected_items)
+        cn = len(selected_indices)
         msg = f"Converting {cn} recording{'s' if cn != 1 else ''}..."
         self.status_label.config(text=msg)
 
         # Here you would implement the actual conversion logic
         # For now, just print the selected items
         print("Selected recordings:")
-        for item in selected_items:
-            print(f"  - {item}")
+        for index in selected_indices:
+            title = self.recordings[index].get("title")
+            filename = self.recordings[index].get("filename")
+            msg = f"{title} - {filename}"
+            print(f"  - {msg}")
 
     def run(self):
         """Start the GUI main loop."""

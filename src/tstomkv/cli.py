@@ -17,6 +17,7 @@ from tstomkv.files import (
     sendFile,
     stopNow,
 )
+from tstomkv.guihelper import humanTime, transcodeFile
 from tstomkv.recordings import filteredTitles  # , recordedTitles
 from tstomkv.tvh import fileMoved
 
@@ -27,13 +28,6 @@ class StopAll(Exception):
 
 class CopyError(Exception):
     pass
-
-
-def transcodeFile(src, dst, statsfile, overwrite=False):
-    """Initiate the transcoder for a given source file to a destination file"""
-    dirname = os.path.dirname(dst)
-    Path(dirname).mkdir(mode=0o755, exist_ok=True, parents=True)
-    return convert_ts_to_mkv(src, dst, statsfile, overwrite=overwrite)
 
 
 def doStats(statsfile, duration):
@@ -162,18 +156,6 @@ def kodimkv():
         # if res != "":
         #     raise Exception(f"Failed to remove remote file {src}")
         # print(f"process time for {src}: {humanTime(time.time() - starttime)}")
-
-
-def humanTime(seconds):
-    """convert seconds to human readable time"""
-    m, s = divmod(seconds, 60)
-    h, m = divmod(m, 60)
-    if h > 0:
-        return f"{int(h)}h {int(m)}m {int(s)}s"
-    elif m > 0:
-        return f"{int(m)}m {int(s)}s"
-    else:
-        return f"{int(s)}s"
 
 
 def tvhmkv():
