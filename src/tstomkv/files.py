@@ -83,15 +83,17 @@ def sendFile(src, dst, banner=False):
 def getFile(src, dst, banner=False):
     """get a file from the media server"""
     try:
+        xdst = str(dst) if type(dst) != str else dst
+        xsrc = str(src) if type(src) != str else src
         cfg = readConfig()
         mhost = cfg["mediaserver"]["host"]
         muser = cfg["mediaserver"]["user"]
         mkeyfn = expandPath(f'~/.ssh/{cfg["mediaserver"]["keyfn"]}')
         ckwargs = {"key_filename": mkeyfn}
         if banner:
-            print(f"Retrieving {dst} from {mhost}:{src}", flush=True)
+            print(f"Retrieving {xdst} from {mhost}:{xsrc}", flush=True)
         with Connection(host=mhost, user=muser, connect_kwargs=ckwargs) as c:
-            c.get(src, dst)
+            c.get(xsrc, xdst)
         return True
     except Exception as e:
         errorNotify(sys.exc_info()[2], e)

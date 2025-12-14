@@ -6,44 +6,12 @@ from tkinter import ttk
 
 import tstomkv
 from tstomkv import errorNotify
-from tstomkv.files import humanSize, pathManipulation
+from tstomkv.files import getFile, humanSize, pathManipulation, remoteFileSize
 from tstomkv.recordings import filteredTitles
 
 
-def monitorFileCopy(srcsize, dst, root: tk.Tk):
-    """Monitor the file copy progress, showing a progress bar in the given root window."""
-    childw = tk.Toplevel(root)
-    hsize = humanSize(srcsize)
-    childw.title("File Copy Progress")
-    childw.geometry("400x150")
-    plabel = ttk.Label(
-        childw, text=f"Copying {Path(dst).name} - {hsize} ({srcsize} bytes) ..."
-    )
-    plabel.pack(pady=10)
-    progressvar = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(
-        childw, variable=progressvar, mode="determinate", maximum=100
-    )
-    progress_bar.pack(fill=tk.X, padx=10, pady=10)
-
-    def update_progress():
-        try:
-            copied_size = Path(dst).stat().st_size if Path(dst).exists() else 0
-            progress = (copied_size / srcsize) * 100 if srcsize > 0 else 0
-            progressvar.set(progress)
-            if copied_size >= srcsize:
-                childw.destroy()
-            else:
-                childw.after(1000, update_progress)
-        except Exception as e:
-            errorNotify(sys.exc_info()[2], e)
-            childw.destroy()
-
-    update_progress()
-
-
 def runStatsGui(title: str, statsfile: str, duration: int, root: tk.Tk):
-    """Convert a file, putting the progress bar in this window."""
+    """When transcoding put the progress from the stats file into a GUI progress bar."""
     childw = tk.Toplevel(root)
     childw.title("TS to MKV Converter")
     childw.geometry("400x200")
@@ -65,6 +33,7 @@ def runStatsGui(title: str, statsfile: str, duration: int, root: tk.Tk):
             cn += 1
             if cn > 12:
                 plabel.config(text="No stats file after 1 minute, giving up")
+                print("No stats file after 1 minute, giving up")
                 return False
         return True
 
@@ -86,12 +55,17 @@ def runStatsGui(title: str, statsfile: str, duration: int, root: tk.Tk):
                     progressvar.set(elapsed)
                 if "progress" in stats:
                     if stats["progress"] == "end":
-                        childw.destroy()
+                        finish_stats()
+                        return
         childw.after(holdoff * 1000, update_progress)
+
+    def finish_stats():
+        childw.destroy()
 
     if not waitForStatsFile():
         childw.destroy()
         return
+
     update_progress()
 
 
@@ -306,8 +280,31 @@ class TStoMKVGUI:
         for index in selected_indices:
             title = self.recordings[index].get("title")
             filename = self.recordings[index].get("filename")
+            pmap = pathManipulation(
+                filename, replace="/var/lib/tvheadend", mkdestdir=True
+            )
+            self.copyIn(filename, pmap["dest"])
             msg = f"{title} - {filename}"
             print(f"  - {msg}")
+
+    def copyIn(self, src, dst):
+        """Copy a file into the system."""
+        try:
+            srcsize = remoteFileSize(src)
+            if srcsize < 0:
+                raise Exception("Could not determine source file size")
+            msg = f"Copying {Path(src).name} - {humanSize(srcsize)} ({srcsize:,} bytes) ..."
+            print(msg)
+            self.status_label.config(text=msg)
+            self.status_label.update()
+            getFile(src, dst, banner=True)
+            msg = f"File copied to {dst}"
+            self.status_label.config(text=msg)
+            self.status_label.update()
+            print(msg)
+        except Exception as e:
+            errorNotify(sys.exc_info()[2], e)
+            return None
 
     def run(self):
         """Start the GUI main loop."""
