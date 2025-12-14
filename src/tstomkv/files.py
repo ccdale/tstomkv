@@ -83,8 +83,8 @@ def sendFile(src, dst, banner=False):
 def getFile(src, dst, banner=False):
     """get a file from the media server"""
     try:
-        xdst = str(dst) if type(dst) != str else dst
-        xsrc = str(src) if type(src) != str else src
+        xdst = str(dst) if type(dst) is not str else dst
+        xsrc = str(src) if type(src) is not str else src
         cfg = readConfig()
         mhost = cfg["mediaserver"]["host"]
         muser = cfg["mediaserver"]["user"]
