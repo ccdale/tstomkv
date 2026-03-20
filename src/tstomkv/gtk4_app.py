@@ -72,6 +72,7 @@ def _resolve_icon_file():
         return candidates[0]
     return None
 
+
 if Gtk is not None:
 
     def _register_app_icon(window):
@@ -89,7 +90,6 @@ if Gtk is not None:
 
         Gtk.Window.set_default_icon_name(_APP_ICON_NAME)
         window.set_icon_name(_APP_ICON_NAME)
-
 
     def _build_header_title_widget():
         """Create a title widget with the app icon for the header bar."""
