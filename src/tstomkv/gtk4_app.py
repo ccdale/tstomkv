@@ -18,8 +18,91 @@ from .gtk4_transfer import FileCopyProgressDialog
 
 FilteredTitlesWindow = None
 FilteredTitlesApp = None
+_APP_ICON_NAME = "tstomkv-icon"
+
+
+def _icon_asset_dirs():
+    """Return existing directories that may contain app icon assets."""
+    dirs = []
+    package_assets = Path(__file__).resolve().parent / "assets"
+    for path in (package_assets / "png", package_assets):
+        if path.exists() and path not in dirs:
+            dirs.append(path)
+
+    try:
+        repo_root = Path(tstomkv.gitroot())
+    except SystemExit:
+        repo_root = None
+
+    if repo_root is not None:
+        repo_assets = repo_root / "assets"
+        for path in (repo_assets / "png", repo_assets):
+            if path.exists() and path not in dirs:
+                dirs.append(path)
+
+    return dirs
+
+
+def _icon_file_candidates():
+    """Return icon files in order of preference for in-app display."""
+    candidates = []
+    for asset_dir in _icon_asset_dirs():
+        names = []
+        if asset_dir.name == "png":
+            names.extend(
+                [
+                    f"{_APP_ICON_NAME}-256.png",
+                    f"{_APP_ICON_NAME}-512.png",
+                    f"{_APP_ICON_NAME}.png",
+                ]
+            )
+        else:
+            names.extend([f"{_APP_ICON_NAME}.svg", f"{_APP_ICON_NAME}.png"])
+        for name in names:
+            path = asset_dir / name
+            if path.exists() and path not in candidates:
+                candidates.append(path)
+    return candidates
+
+
+def _resolve_icon_file():
+    """Return the preferred icon file path, if any."""
+    candidates = _icon_file_candidates()
+    if candidates:
+        return candidates[0]
+    return None
 
 if Gtk is not None:
+
+    def _register_app_icon(window):
+        """Register local icon search paths and apply the icon name to the window."""
+        display = window.get_display()
+        if display is None:
+            return
+
+        icon_theme = Gtk.IconTheme.get_for_display(display)
+        existing = set(icon_theme.get_search_path())
+        for asset_dir in _icon_asset_dirs():
+            asset_dir_str = str(asset_dir)
+            if asset_dir_str not in existing:
+                icon_theme.add_search_path(asset_dir_str)
+
+        Gtk.Window.set_default_icon_name(_APP_ICON_NAME)
+        window.set_icon_name(_APP_ICON_NAME)
+
+
+    def _build_header_title_widget():
+        """Create a title widget with the app icon for the header bar."""
+        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        icon_path = _resolve_icon_file()
+        if icon_path is not None:
+            image = Gtk.Image.new_from_file(str(icon_path))
+            image.set_pixel_size(24)
+            title_box.append(image)
+
+        label = Gtk.Label(label="tstomkv GTK4")
+        title_box.append(label)
+        return title_box
 
     class FilteredTitlesWindow(Gtk.ApplicationWindow):
         """Main GTK4 window for displaying filtered titles."""
@@ -30,6 +113,15 @@ if Gtk is not None:
             self.set_default_size(980, 700)
             self._rows = []
             self._title_checkboxes = {}
+
+            try:
+                _register_app_icon(self)
+            except Exception as e:
+                errorNotify(sys.exc_info()[2], e)
+
+            header_bar = Gtk.HeaderBar()
+            header_bar.set_title_widget(_build_header_title_widget())
+            self.set_titlebar(header_bar)
 
             outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
             outer.set_margin_top(10)

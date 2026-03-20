@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="56" y1="40" x2="456" y2="472" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B1D2A"/>
+      <stop offset="1" stop-color="#153B52"/>
+    </linearGradient>
+    <linearGradient id="tsBody" x1="90" y1="128" x2="230" y2="366" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#45A8FF"/>
+      <stop offset="1" stop-color="#1F6FAA"/>
+    </linearGradient>
+    <linearGradient id="mkvBody" x1="282" y1="128" x2="422" y2="366" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3FD18A"/>
+      <stop offset="1" stop-color="#1F8E5C"/>
+    </linearGradient>
+    <filter id="softShadow" x="0" y="0" width="512" height="512" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <rect x="28" y="28" width="456" height="456" rx="96" fill="url(#bg)"/>
+  <rect x="40" y="40" width="432" height="432" rx="84" stroke="#7ED6FF" stroke-opacity="0.28" stroke-width="2"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="86" y="124" width="148" height="244" rx="28" fill="url(#tsBody)"/>
+    <rect x="96" y="136" width="128" height="220" rx="20" stroke="#D9F2FF" stroke-opacity="0.45" stroke-width="2"/>
+    <rect x="112" y="158" width="96" height="20" rx="8" fill="#D6F1FF" fill-opacity="0.4"/>
+    <rect x="112" y="190" width="96" height="20" rx="8" fill="#D6F1FF" fill-opacity="0.4"/>
+    <rect x="112" y="222" width="96" height="20" rx="8" fill="#D6F1FF" fill-opacity="0.4"/>
+    <text x="160" y="320" text-anchor="middle" fill="#EAF8FF" font-size="52" font-family="DejaVu Sans, Noto Sans, sans-serif" font-weight="700">TS</text>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <path d="M250 246H340" stroke="#FFCB6B" stroke-width="22" stroke-linecap="round"/>
+    <path d="M330 212L378 256L330 300" stroke="#FFCB6B" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="278" y="124" width="148" height="244" rx="28" fill="url(#mkvBody)"/>
+    <rect x="288" y="136" width="128" height="220" rx="20" stroke="#D8FFE8" stroke-opacity="0.45" stroke-width="2"/>
+
+    <rect x="304" y="156" width="96" height="22" rx="10" fill="#D8FFE8" fill-opacity="0.36"/>
+    <rect x="304" y="188" width="96" height="22" rx="10" fill="#D8FFE8" fill-opacity="0.36"/>
+    <rect x="304" y="220" width="96" height="22" rx="10" fill="#D8FFE8" fill-opacity="0.36"/>
+
+    <circle cx="322" cy="286" r="9" fill="#E8FFF2" fill-opacity="0.85"/>
+    <circle cx="352" cy="286" r="9" fill="#E8FFF2" fill-opacity="0.85"/>
+    <circle cx="382" cy="286" r="9" fill="#E8FFF2" fill-opacity="0.85"/>
+
+    <text x="352" y="338" text-anchor="middle" fill="#EFFFF6" font-size="42" font-family="DejaVu Sans, Noto Sans, sans-serif" font-weight="700">MKV</text>
+  </g>
+</svg>
