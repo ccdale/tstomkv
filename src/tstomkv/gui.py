@@ -2,7 +2,8 @@ import sys
 import tkinter as tk
 from pathlib import Path
 from threading import Thread
-from tkinter import ttk
+from tkinter import *
+from tkinter.ttk import *
 
 import tstomkv
 from tstomkv import errorNotify
@@ -15,10 +16,10 @@ def runStatsGui(title: str, statsfile: str, duration: int, root: tk.Tk):
     childw = tk.Toplevel(root)
     childw.title("TS to MKV Converter")
     childw.geometry("400x200")
-    plabel = ttk.Label(childw, text="Waiting for stats file to appear ...")
+    plabel = Label(childw, text="Waiting for stats file to appear ...")
     plabel.pack(pady=10)
     progressvar = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(
+    progress_bar = Progressbar(
         childw, variable=progressvar, mode="determinate", maximum=duration
     )
     progress_bar.pack(fill=tk.X, padx=10, pady=10)
@@ -80,10 +81,10 @@ class CheckboxListbox(tk.Frame):
 
         # Create scrollable frame
         self.canvas = tk.Canvas(self)
-        self.scrollbar = ttk.Scrollbar(
+        self.scrollbar = Scrollbar(
             self, orient="vertical", command=self.canvas.yview
         )
-        self.scrollable_frame = ttk.Frame(self.canvas)
+        self.scrollable_frame = Frame(self.canvas)
 
         # Configure scrolling
         self.scrollable_frame.bind(
@@ -127,7 +128,7 @@ class CheckboxListbox(tk.Frame):
             self.checkbox_vars.append(var)
 
             # Create checkbox with item text
-            checkbox = ttk.Checkbutton(
+            checkbox = Checkbutton(
                 self.scrollable_frame, text=str(item), variable=var, padding=(5, 2)
             )
             checkbox.pack(fill=tk.X, anchor="w")
@@ -168,22 +169,30 @@ class TStoMKVGUI:
     """Main GUI application for tstomkv."""
 
     def __init__(self):
-        self.root = tk.Tk()
+        self.root = Tk()
         self.root.title(f"TS to MKV Converter - {tstomkv.getVersion()}")
         self.root.geometry("800x600")
 
+        # self.cant14b = font.Font(family="Cantarell", size=14, weight="bold")
+        # self.cant14 = font.Font(family="Cantarell", size=14, weight="normal")
+        # self.cant12 = font.Font(family="Cantarell", size=12, weight="normal")
+        # self.noto12 = font.Font(family="Noto Sans", size=12, weight="normal")
+        # self.noto16b = font.Font(family="Noto Sans", size=24, weight="bold")
         # Create main frame
-        main_frame = ttk.Frame(self.root)
+        main_frame = Frame(self.root)
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
+        # print(tk.font.families())
         # Title label
-        title_label = ttk.Label(
-            main_frame, text="Select recordings to convert:", font=("Arial", 14, "bold")
+        title_label = Label(
+            # main_frame, text="Select recordings to convert:", font=("Arial", 14, "bold")
+            # main_frame, text="Select recordings to convert:", font=self.cant14b
+            main_frame, text="Select recordings to convert:", # font=("System", 24, "bold")
         )
         title_label.pack(pady=(0, 10))
 
         # Status label
-        self.status_label = ttk.Label(main_frame, text="Ready")
+        self.status_label = Label(main_frame, text="Ready")
         self.status_label.pack(pady=(10, 0))
 
         # Load recordings and create checkbox listbox
@@ -193,34 +202,34 @@ class TStoMKVGUI:
         self.checkbox_listbox = CheckboxListbox(main_frame, items=self.recording_names)
 
         # Button frame
-        button_frame = ttk.Frame(main_frame)
+        button_frame = Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(10, 0))
 
         # Control buttons
-        ttk.Button(
+        Button(
             button_frame, text="Select All", command=self.checkbox_listbox.select_all
         ).pack(side=tk.LEFT, padx=(0, 5))
 
-        ttk.Button(
+        Button(
             button_frame,
             text="Deselect All",
             command=self.checkbox_listbox.deselect_all,
         ).pack(side=tk.LEFT, padx=5)
 
-        ttk.Button(
+        Button(
             button_frame, text="Toggle All", command=self.checkbox_listbox.toggle_all
         ).pack(side=tk.LEFT, padx=5)
 
         # Action buttons
-        ttk.Button(
+        Button(
             button_frame, text="Convert Selected", command=self.convert_selected
         ).pack(side=tk.RIGHT, padx=(5, 0))
 
-        ttk.Button(
+        Button(
             button_frame, text="Refresh List", command=self.refresh_recordings
         ).pack(side=tk.RIGHT, padx=5)
 
-        ttk.Button(button_frame, text="Quit", command=self.root.quit).pack(
+        Button(button_frame, text="Quit", command=self.root.quit).pack(
             side=tk.RIGHT, padx=5
         )
 

@@ -73,6 +73,8 @@ def kodimkv():
     cfg = readConfig()
     files = remoteFileList()
     print(f"{len(files)} Remote files")
+    for fn in files:
+        print(f"Remote file: {fn}")
     if len(sys.argv) > 1:
         skip = int(sys.argv[1])
     for src in files:
