@@ -2,13 +2,15 @@
 
 import hashlib
 import os
+import subprocess
 import threading
 import time
 from pathlib import Path
 
 from .ffmpeg import convert_ts_to_mkv, videoDuration
-from .files import getFile, humanSize, remoteCommand, remoteFileSize
+from .files import getFile, humanSize, remoteCommand, remoteFileSize, sendFile
 from .gtk4_runtime import GLib, Gtk
+from .tvh import fileMoved
 
 
 def _calculate_progress(src_size, dst_path, elapsed_time):
@@ -191,6 +193,83 @@ def _format_conversion_status(filename, elapsed_seconds, duration_seconds, speed
     return f"Converting {filename}: elapsed {elapsed_txt} speed {speed_txt}"
 
 
+def _publish_converted_output(remote_src, local_mkv, progress_callback=None):
+    """Publish converted MKV back to media server and notify tvheadend.
+
+    Steps:
+    1. Upload local mkv to the same remote directory as source.
+    2. Notify tvheadend with fileMoved(src, dst).
+    3. Delete original remote source file.
+    """
+
+    def _emit(status, step_fraction):
+        if progress_callback is not None:
+            progress_callback(status, step_fraction)
+
+    remote_dst = str(Path(remote_src).with_suffix(".mkv"))
+    mkv_name = Path(remote_dst).name
+
+    _emit(f"Publishing {mkv_name}: uploading", 0.20)
+    if not sendFile(local_mkv, remote_dst, banner=False):
+        _emit(f"Failed to upload {mkv_name} to media server", 0.0)
+        return False, f"Failed to upload {mkv_name} to media server"
+
+    _emit(f"Publishing {mkv_name}: verifying checksum", 0.45)
+    local_sha = _local_file_sha256(local_mkv)
+    remote_sha = _remote_file_sha256(remote_dst)
+    if not local_sha or not remote_sha:
+        remoteCommand(f'rm -f "{remote_dst}"')
+        _emit(f"Uploaded {mkv_name}, but checksum verification failed", 0.0)
+        return False, f"Uploaded {mkv_name}, but checksum verification failed"
+
+    if local_sha != remote_sha:
+        remoteCommand(f'rm -f "{remote_dst}"')
+        _emit(f"Uploaded {mkv_name}, but checksum mismatch", 0.0)
+        return False, f"Uploaded {mkv_name}, but checksum mismatch"
+
+    _emit(f"Publishing {mkv_name}: notifying tvheadend", 0.70)
+    try:
+        fileMoved(remote_src, remote_dst)
+    except Exception as e:
+        _emit(f"Uploaded {mkv_name}, but tvheadend notify failed: {e}", 0.0)
+        return False, f"Uploaded {mkv_name}, but tvheadend notify failed: {e}"
+
+    _emit(f"Publishing {mkv_name}: deleting source .ts", 0.90)
+    delete_out = remoteCommand(f'rm -f "{remote_src}" && echo __deleted__')
+    if "__deleted__" not in delete_out:
+        _emit(f"Uploaded {mkv_name}, but failed to delete source file", 0.0)
+        return False, f"Uploaded {mkv_name}, but failed to delete source file"
+
+    _emit(f"Published {mkv_name} to media server", 1.0)
+    return True, f"Published {mkv_name} to media server"
+
+
+def _desktop_notify(title, body):
+    """Send a desktop notification, preferring Gio and falling back to notify-send."""
+    if Gtk is not None:
+        try:
+            from gi.repository import Gio
+
+            app = Gio.Application.get_default()
+            if app is not None:
+                notification = Gio.Notification.new(title)
+                notification.set_body(body)
+                app.send_notification(None, notification)
+                return True
+        except Exception:
+            pass
+
+    try:
+        result = subprocess.run(
+            ["notify-send", title, body],
+            capture_output=True,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def copy_file_with_progress(src, dst, callback=None, error_callback=None):
     """Copy a file from remote media server with progress monitoring.
 
@@ -250,6 +329,8 @@ if Gtk is not None:
             self._overall_start_time = time.monotonic()
             self.total_conversions = 0
             self.completed_conversions = 0
+            self.total_publishes = 0
+            self.completed_publishes = 0
 
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             box.set_margin_top(20)
@@ -278,6 +359,10 @@ if Gtk is not None:
             self.conversion_label.set_xalign(0)
             box.append(self.conversion_label)
 
+            self.publish_label = Gtk.Label(label="Publish: pending")
+            self.publish_label.set_xalign(0)
+            box.append(self.publish_label)
+
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             button_box.set_halign(Gtk.Align.END)
 
@@ -300,6 +385,18 @@ if Gtk is not None:
             self._cancelled = True
             self.cancel_btn.set_sensitive(False)
             self.status_label.set_text("Cancellation requested...")
+
+        def _notify_workflow_complete(self, summary_text):
+            """Trigger a GNOME desktop notification for completed workflow."""
+
+            def _notify():
+                _desktop_notify("tstomkv conversion complete", summary_text)
+                return False
+
+            if GLib is not None:
+                GLib.idle_add(_notify)
+            else:
+                _notify()
 
         def _set_overall_label(self, overall_bytes=None):
             """Render overall bytes progress and total elapsed time."""
@@ -355,6 +452,18 @@ if Gtk is not None:
                 self._set_overall_label(self.total_bytes_transferred)
                 self.conversion_label.set_text(
                     f"Conversion: {self.completed_conversions}/{self.total_conversions} files complete ({overall_fraction * 100:.1f}%)"
+                )
+
+            if GLib is not None:
+                GLib.idle_add(_update_ui)
+
+        def _on_publish_progress(self, status, step_fraction, overall_fraction):
+            def _update_ui():
+                self.progress_bar.set_fraction(step_fraction)
+                self.status_label.set_text(status)
+                self._set_overall_label(self.total_bytes_transferred)
+                self.publish_label.set_text(
+                    f"Publish: {self.completed_publishes}/{self.total_publishes} files complete ({overall_fraction * 100:.1f}%)"
                 )
 
             if GLib is not None:
@@ -431,19 +540,24 @@ if Gtk is not None:
             """Run conversion worker for one ts file."""
             convert_ts_to_mkv(ts_path, mkv_path, statsfile, overwrite=True)
 
-        def _convert_all_files(self, local_ts_files):
+        def _convert_all_files(self, copied_files):
             """Convert copied ts files one at a time with concurrent progress monitor."""
             convert_candidates = [
-                path for path in local_ts_files if str(path).lower().endswith(".ts")
+                (remote_src, local_ts)
+                for remote_src, local_ts in copied_files
+                if str(local_ts).lower().endswith(".ts")
             ]
             self.total_conversions = len(convert_candidates)
             self.completed_conversions = 0
+            self.total_publishes = len(convert_candidates)
+            self.completed_publishes = 0
 
             if self.total_conversions == 0:
                 self._on_conversion_progress(1.0, "No .ts files to convert", 1.0)
+                self._on_publish_progress("No files to publish", 1.0, 1.0)
                 return 0
 
-            for index, ts_path in enumerate(convert_candidates):
+            for index, (remote_src, ts_path) in enumerate(convert_candidates):
                 if self._cancelled:
                     break
 
@@ -498,9 +612,47 @@ if Gtk is not None:
                         f"Conversion failed for {ts_name}",
                         overall_fraction,
                     )
+                    publish_overall = (
+                        self.completed_publishes / self.total_publishes
+                        if self.total_publishes > 0
+                        else 0.0
+                    )
+                    self._on_publish_progress(
+                        f"Publish skipped for {ts_name}: conversion failed",
+                        0.0,
+                        publish_overall,
+                    )
+                    continue
+
+                def _publish_callback(step_status, step_fraction):
+                    publish_overall = (
+                        (self.completed_publishes + step_fraction)
+                        / self.total_publishes
+                        if self.total_publishes > 0
+                        else 0.0
+                    )
+                    self._on_publish_progress(
+                        step_status,
+                        step_fraction,
+                        publish_overall,
+                    )
+
+                publish_ok, publish_msg = _publish_converted_output(
+                    remote_src,
+                    mkv_path,
+                    progress_callback=_publish_callback,
+                )
+                if not publish_ok:
+                    overall_fraction = (
+                        self.completed_conversions / self.total_conversions
+                        if self.total_conversions > 0
+                        else 0.0
+                    )
+                    self._on_conversion_progress(0.0, publish_msg, overall_fraction)
                     continue
 
                 self.completed_conversions += 1
+                self.completed_publishes += 1
                 overall_fraction = (
                     self.completed_conversions / self.total_conversions
                     if self.total_conversions > 0
@@ -508,9 +660,15 @@ if Gtk is not None:
                 )
                 self._on_conversion_progress(
                     1.0,
-                    f"Converted {ts_name} to {Path(mkv_path).name}",
+                    publish_msg,
                     overall_fraction,
                 )
+                publish_overall = (
+                    self.completed_publishes / self.total_publishes
+                    if self.total_publishes > 0
+                    else 0.0
+                )
+                self._on_publish_progress(publish_msg, 1.0, publish_overall)
 
             return self.completed_conversions
 
@@ -548,7 +706,7 @@ if Gtk is not None:
                     )
                     if skip_copy:
                         self.total_bytes_transferred += src_size
-                        copied_local_files.append(dst)
+                        copied_local_files.append((src, dst))
                         overall_progress = (
                             self.total_bytes_transferred / self.total_size
                             if self.total_size > 0
@@ -590,7 +748,7 @@ if Gtk is not None:
 
                     if success and Path(dst).exists():
                         self.total_bytes_transferred += os.path.getsize(dst)
-                        copied_local_files.append(dst)
+                        copied_local_files.append((src, dst))
 
                     if not success:
                         if not self._cancelled:
@@ -602,15 +760,17 @@ if Gtk is not None:
                 if not self._cancelled:
                     converted_count = self._convert_all_files(copied_local_files)
                     size_str = humanSize(self.total_bytes_transferred)
+                    summary_text = (
+                        f"Copy+convert complete: {len(copied_local_files)} file(s) copied "
+                        f"({size_str}), {converted_count} conversion(s) complete"
+                    )
                     self._on_copy_progress(
                         1.0,
-                        (
-                            f"Copy+convert complete: {len(copied_local_files)} file(s) copied "
-                            f"({size_str}), {converted_count} conversion(s) complete"
-                        ),
+                        summary_text,
                         self.total_bytes_transferred,
                         finished=True,
                     )
+                    self._notify_workflow_complete(summary_text)
                 else:
                     self._on_copy_progress(
                         1.0,

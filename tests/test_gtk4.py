@@ -283,3 +283,163 @@ def test_format_conversion_status_with_duration():
     assert "25.0%" in status
     assert "00:30/02:00" in status
     assert "0.9x" in status
+
+
+def test_publish_converted_output_success(monkeypatch, tmp_path):
+    local_mkv = tmp_path / "episode.mkv"
+    local_mkv.write_bytes(b"mkv")
+
+    calls = {"moved": None, "commands": []}
+
+    monkeypatch.setattr(gtk4_transfer, "sendFile", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(gtk4_transfer, "_local_file_sha256", lambda _p: "a" * 64)
+    monkeypatch.setattr(gtk4_transfer, "_remote_file_sha256", lambda _p: "a" * 64)
+
+    def _fake_moved(src, dst):
+        calls["moved"] = (src, dst)
+
+    monkeypatch.setattr(gtk4_transfer, "fileMoved", _fake_moved)
+
+    def _fake_remote_command(cmd):
+        calls["commands"].append(cmd)
+        return "__deleted__"
+
+    monkeypatch.setattr(
+        gtk4_transfer,
+        "remoteCommand",
+        _fake_remote_command,
+    )
+
+    ok, msg = gtk4_transfer._publish_converted_output(
+        "/var/lib/tvheadend/rec/episode.ts", str(local_mkv)
+    )
+
+    assert ok is True
+    assert "Published" in msg
+    assert calls["moved"] == (
+        "/var/lib/tvheadend/rec/episode.ts",
+        "/var/lib/tvheadend/rec/episode.mkv",
+    )
+    assert (
+        calls["commands"][-1]
+        == 'rm -f "/var/lib/tvheadend/rec/episode.ts" && echo __deleted__'
+    )
+
+
+def test_publish_converted_output_stops_on_upload_failure(monkeypatch, tmp_path):
+    local_mkv = tmp_path / "episode.mkv"
+    local_mkv.write_bytes(b"mkv")
+
+    called = {"moved": False, "deleted": False}
+
+    monkeypatch.setattr(gtk4_transfer, "sendFile", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        gtk4_transfer,
+        "fileMoved",
+        lambda *_args, **_kwargs: called.update({"moved": True}),
+    )
+    monkeypatch.setattr(
+        gtk4_transfer,
+        "remoteCommand",
+        lambda *_args, **_kwargs: called.update({"deleted": True}) or "",
+    )
+
+    ok, msg = gtk4_transfer._publish_converted_output(
+        "/var/lib/tvheadend/rec/episode.ts", str(local_mkv)
+    )
+
+    assert ok is False
+    assert "Failed to upload" in msg
+    assert called["moved"] is False
+    assert called["deleted"] is False
+
+
+def test_publish_converted_output_fails_on_checksum_mismatch(monkeypatch, tmp_path):
+    local_mkv = tmp_path / "episode.mkv"
+    local_mkv.write_bytes(b"mkv")
+
+    called = {"moved": False, "commands": []}
+
+    monkeypatch.setattr(gtk4_transfer, "sendFile", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(gtk4_transfer, "_local_file_sha256", lambda _p: "a" * 64)
+    monkeypatch.setattr(gtk4_transfer, "_remote_file_sha256", lambda _p: "b" * 64)
+    monkeypatch.setattr(
+        gtk4_transfer,
+        "fileMoved",
+        lambda *_args, **_kwargs: called.update({"moved": True}),
+    )
+    monkeypatch.setattr(
+        gtk4_transfer,
+        "remoteCommand",
+        lambda cmd: called["commands"].append(cmd) or "",
+    )
+
+    ok, msg = gtk4_transfer._publish_converted_output(
+        "/var/lib/tvheadend/rec/episode.ts", str(local_mkv)
+    )
+
+    assert ok is False
+    assert "checksum mismatch" in msg
+    assert called["moved"] is False
+    assert called["commands"] == ['rm -f "/var/lib/tvheadend/rec/episode.mkv"']
+
+
+def test_publish_converted_output_reports_stage_progress(monkeypatch, tmp_path):
+    local_mkv = tmp_path / "episode.mkv"
+    local_mkv.write_bytes(b"mkv")
+
+    stages = []
+
+    monkeypatch.setattr(gtk4_transfer, "sendFile", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(gtk4_transfer, "_local_file_sha256", lambda _p: "a" * 64)
+    monkeypatch.setattr(gtk4_transfer, "_remote_file_sha256", lambda _p: "a" * 64)
+    monkeypatch.setattr(gtk4_transfer, "fileMoved", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        gtk4_transfer, "remoteCommand", lambda *_args, **_kwargs: "__deleted__"
+    )
+
+    ok, _msg = gtk4_transfer._publish_converted_output(
+        "/var/lib/tvheadend/rec/episode.ts",
+        str(local_mkv),
+        progress_callback=lambda status, fraction: stages.append((status, fraction)),
+    )
+
+    assert ok is True
+    fractions = [fraction for _status, fraction in stages]
+    assert fractions[0] == 0.20
+    assert 0.45 in fractions
+    assert 0.70 in fractions
+    assert 0.90 in fractions
+    assert fractions[-1] == 1.0
+
+
+def test_desktop_notify_falls_back_to_notify_send(monkeypatch):
+    class _Result:
+        returncode = 0
+
+    calls = []
+
+    monkeypatch.setattr(gtk4_transfer, "Gtk", None)
+    monkeypatch.setattr(
+        gtk4_transfer.subprocess,
+        "run",
+        lambda cmd, capture_output, check: calls.append(cmd) or _Result(),
+    )
+
+    ok = gtk4_transfer._desktop_notify("done", "workflow complete")
+
+    assert ok is True
+    assert calls[0][0] == "notify-send"
+
+
+def test_desktop_notify_returns_false_when_notify_send_unavailable(monkeypatch):
+    monkeypatch.setattr(gtk4_transfer, "Gtk", None)
+
+    def _raise(*_args, **_kwargs):
+        raise OSError("notify-send missing")
+
+    monkeypatch.setattr(gtk4_transfer.subprocess, "run", _raise)
+
+    ok = gtk4_transfer._desktop_notify("done", "workflow complete")
+
+    assert ok is False
