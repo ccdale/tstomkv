@@ -1,11 +1,12 @@
 """Transfer helpers and copy progress dialog for the GTK4 UI."""
 
+import hashlib
 import os
 import threading
 import time
 from pathlib import Path
 
-from .files import getFile, humanSize, remoteFileSize
+from .files import getFile, humanSize, remoteCommand, remoteFileSize
 from .gtk4_runtime import GLib, Gtk
 
 
@@ -63,6 +64,75 @@ def _format_elapsed_mmss(elapsed_seconds):
     return f"{minutes:02d}:{seconds:02d}"
 
 
+def _is_sha256_digest(value):
+    if not value or len(value) != 64:
+        return False
+    try:
+        int(value, 16)
+        return True
+    except ValueError:
+        return False
+
+
+def _parse_sha_output(raw_value):
+    if not raw_value:
+        return None
+    token = raw_value.strip().split()[0] if raw_value.strip() else ""
+    return token.lower() if _is_sha256_digest(token.lower()) else None
+
+
+def _local_file_sha256(path):
+    try:
+        digest = hashlib.sha256()
+        with Path(path).open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except Exception:
+        return None
+
+
+def _remote_file_sha256(path):
+    primary = remoteCommand(f'sha256sum "{path}"')
+    sha = _parse_sha_output(primary)
+    if sha:
+        return sha
+
+    fallback = remoteCommand(f'shasum -a 256 "{path}"')
+    return _parse_sha_output(fallback)
+
+
+def _reconcile_existing_destination(src, dst):
+    """Validate existing destination content before copying.
+
+    Returns:
+        Tuple of (skip_copy, status_message). If skip_copy is True, destination
+        matches source and copy can be skipped. Otherwise destination is removed
+        and copy should proceed.
+    """
+    dst_path = Path(dst)
+    if not dst_path.exists():
+        return False, ""
+
+    src_sha = _remote_file_sha256(src)
+    dst_sha = _local_file_sha256(dst_path)
+    name = dst_path.name
+
+    if src_sha and dst_sha and src_sha == dst_sha:
+        return True, f"Skipping {name}: destination already matches source"
+
+    try:
+        dst_path.unlink()
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to remove existing destination {dst_path}: {e}"
+        ) from e
+
+    if src_sha and dst_sha:
+        return False, f"Replacing {name}: destination hash differs from source"
+    return False, f"Replacing {name}: could not verify hash match"
+
+
 def copy_file_with_progress(src, dst, callback=None, error_callback=None):
     """Copy a file from remote media server with progress monitoring.
 
@@ -75,6 +145,12 @@ def copy_file_with_progress(src, dst, callback=None, error_callback=None):
             if src_size < 0:
                 if error_callback:
                     error_callback(f"Could not determine remote file size for {src}")
+                return
+
+            skip_copy, status = _reconcile_existing_destination(src, dst)
+            if skip_copy:
+                if callback:
+                    callback(progress=1.0, status=status, finished=True)
                 return
 
             start_time = time.time()
@@ -266,6 +342,38 @@ if Gtk is not None:
                     if src_size < 0:
                         self._on_copy_error(f"Could not determine size for {src}")
                         continue
+
+                    skip_copy, preflight_status = _reconcile_existing_destination(
+                        src, dst
+                    )
+                    if skip_copy:
+                        self.total_bytes_transferred += src_size
+                        overall_progress = (
+                            self.total_bytes_transferred / self.total_size
+                            if self.total_size > 0
+                            else 0.0
+                        )
+                        self._on_copy_progress(
+                            overall_progress,
+                            preflight_status,
+                            self.total_bytes_transferred,
+                            finished=False,
+                        )
+                        self.current_index = index + 1
+                        continue
+
+                    if preflight_status:
+                        overall_progress = (
+                            self.total_bytes_transferred / self.total_size
+                            if self.total_size > 0
+                            else 0.0
+                        )
+                        self._on_copy_progress(
+                            overall_progress,
+                            preflight_status,
+                            self.total_bytes_transferred,
+                            finished=False,
+                        )
 
                     monitor_thread = threading.Thread(
                         target=self._monitor_single_progress,

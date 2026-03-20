@@ -1,4 +1,4 @@
-from tstomkv import gtk4
+from tstomkv import gtk4, gtk4_transfer
 
 
 def test_build_title_rows_sorted_and_counts():
@@ -211,3 +211,40 @@ def test_collect_all_files_from_selected_titles():
     assert file_pairs[0][0] == "/media/a1.ts"
     assert file_pairs[1][0] == "/media/a2.ts"
     assert file_pairs[2][0] == "/media/b1.ts"
+
+
+def test_reconcile_existing_destination_skip_when_hash_matches(tmp_path, monkeypatch):
+    dst = tmp_path / "existing.ts"
+    dst.write_bytes(b"same-content")
+    dst_sha = gtk4_transfer._local_file_sha256(dst)
+
+    monkeypatch.setattr(gtk4_transfer, "_remote_file_sha256", lambda _src: dst_sha)
+
+    skip_copy, status = gtk4_transfer._reconcile_existing_destination(
+        "/remote/source.ts", str(dst)
+    )
+
+    assert skip_copy is True
+    assert "Skipping" in status
+    assert dst.exists()
+
+
+def test_reconcile_existing_destination_replace_when_hash_differs(
+    tmp_path, monkeypatch
+):
+    dst = tmp_path / "existing.ts"
+    dst.write_bytes(b"old-content")
+
+    monkeypatch.setattr(
+        gtk4_transfer,
+        "_remote_file_sha256",
+        lambda _src: "0" * 64,
+    )
+
+    skip_copy, status = gtk4_transfer._reconcile_existing_destination(
+        "/remote/source.ts", str(dst)
+    )
+
+    assert skip_copy is False
+    assert "Replacing" in status
+    assert not dst.exists()
