@@ -207,17 +207,19 @@ def copy_file_with_progress(src, dst, callback=None, error_callback=None):
 if Gtk is not None:
 
     class FileCopyProgressDialog(Gtk.ApplicationWindow):
-        """GTK4 progress dialog for copying files from media server."""
+        """GTK4 progress dialog for copying multiple files from media server."""
 
-        def __init__(self, application, src, dst):
+        def __init__(self, application, file_pairs):
             super().__init__(application=application)
-            self.set_title("Copying file from Media Server")
-            self.set_default_size(500, 200)
+            self.set_title("Copying Files from Media Server")
+            self.set_default_size(550, 250)
             self.set_modal(True)
-            self.src = src
-            self.dst = dst
+            self.file_pairs = file_pairs  # List of (src, dst) tuples
+            self.current_index = 0
             self._cancelled = False
             self._finished = False
+            self.total_size = 0  # Total bytes to copy
+            self.total_bytes_transferred = 0  # Cumulative bytes transferred
 
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             box.set_margin_top(20)
@@ -225,9 +227,9 @@ if Gtk is not None:
             box.set_margin_start(20)
             box.set_margin_end(20)
 
-            filename_label = Gtk.Label(label=f"Copying: {Path(src).name}")
-            filename_label.set_xalign(0)
-            box.append(filename_label)
+            self.file_label = Gtk.Label(label="Preparing...")
+            self.file_label.set_xalign(0)
+            box.append(self.file_label)
 
             self.status_label = Gtk.Label(label="Starting transfer...")
             self.status_label.set_xalign(0)
@@ -237,6 +239,10 @@ if Gtk is not None:
             self.progress_bar = Gtk.ProgressBar()
             self.progress_bar.set_fraction(0.0)
             box.append(self.progress_bar)
+
+            self.overall_label = Gtk.Label(label="Overall: calculating...")
+            self.overall_label.set_xalign(0)
+            box.append(self.overall_label)
 
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             button_box.set_halign(Gtk.Align.END)
@@ -261,10 +267,23 @@ if Gtk is not None:
             self.cancel_btn.set_sensitive(False)
             self.status_label.set_text("Cancellation requested...")
 
-        def _on_copy_progress(self, progress, status, finished=False):
+        def _on_copy_progress(self, progress, status, overall_bytes, finished=False):
             def _update_ui():
                 self.progress_bar.set_fraction(progress)
                 self.status_label.set_text(status)
+                if self.total_size > 0:
+                    from tstomkv.files import humanSize
+
+                    overall_human = humanSize(overall_bytes)
+                    total_human = humanSize(self.total_size)
+                    overall_pct = (
+                        (overall_bytes / self.total_size * 100)
+                        if self.total_size > 0
+                        else 0.0
+                    )
+                    self.overall_label.set_text(
+                        f"Overall: {overall_human} / {total_human} ({overall_pct:.1f}%)"
+                    )
                 if finished:
                     self._finished = True
                     self.cancel_btn.set_sensitive(False)
@@ -287,47 +306,118 @@ if Gtk is not None:
 
                 GLib.idle_add(_show_error)
 
-        def _monitor_progress(self):
-            """Monitor transfer progress in background thread."""
+        def _monitor_single_progress(self, src, dst, src_size):
+            """Monitor progress for a single file transfer, return bytes transferred."""
             try:
-                src_size = remoteFileSize(self.src)
-                if src_size < 0:
-                    self._on_copy_error(f"Could not determine file size for {self.src}")
-                    return
-
                 start_time = time.time()
                 while not self._finished and not self._cancelled:
                     elapsed = time.time() - start_time
                     fraction, bytes_tx, rate = _calculate_progress(
-                        src_size, self.dst, elapsed
+                        src_size, dst, elapsed
                     )
                     status = _format_transfer_status(
-                        Path(self.src).name, src_size, bytes_tx, elapsed, rate
+                        Path(src).name, src_size, bytes_tx, elapsed, rate
                     )
-                    self._on_copy_progress(fraction, status, finished=False)
+                    overall_bytes = self.total_bytes_transferred + bytes_tx
+                    overall_progress = (
+                        overall_bytes / self.total_size if self.total_size > 0 else 0.0
+                    )
+                    self._on_copy_progress(
+                        overall_progress, status, overall_bytes, finished=False
+                    )
                     time.sleep(0.5)
+
+                # Return final bytes transferred for this file
+                if Path(dst).exists():
+                    return os.path.getsize(dst)
+                return 0
+            except Exception as e:
+                self._on_copy_error(str(e))
+                return 0
+
+        def _calculate_total_size(self):
+            """Calculate total size of all files to be copied."""
+            total = 0
+            for src, _ in self.file_pairs:
+                try:
+                    size = remoteFileSize(src)
+                    if size > 0:
+                        total += size
+                except Exception:
+                    pass
+            return total
+
+        def _copy_all_files(self):
+            """Copy all files sequentially in background thread."""
+            try:
+                # Calculate total size upfront
+                self.total_size = self._calculate_total_size()
+                if self.total_size <= 0:
+                    self._on_copy_error("Could not determine total size of files")
+                    return
+
+                for index, (src, dst) in enumerate(self.file_pairs):
+                    if self._cancelled:
+                        break
+
+                    self.current_index = index
+
+                    def _update_file_label():
+                        self.file_label.set_text(
+                            f"Copying: {Path(src).name} ({index + 1}/{len(self.file_pairs)})"
+                        )
+
+                    if Gtk:
+                        from gi.repository import GLib
+
+                        GLib.idle_add(_update_file_label)
+
+                    src_size = remoteFileSize(src)
+                    if src_size < 0:
+                        self._on_copy_error(f"Could not determine size for {src}")
+                        continue
+
+                    monitor_thread = threading.Thread(
+                        target=self._monitor_single_progress,
+                        args=(src, dst, src_size),
+                        daemon=True,
+                    )
+                    monitor_thread.start()
+
+                    success = getFile(src, dst, banner=False)
+                    self._finished = True  # Signal monitor thread to exit
+                    monitor_thread.join(timeout=60)
+                    self._finished = False  # Reset for next iteration
+
+                    if success:
+                        # Update cumulative bytes on successful transfer
+                        if Path(dst).exists():
+                            self.total_bytes_transferred += os.path.getsize(dst)
+
+                    if not success:
+                        if not self._cancelled:
+                            self._on_copy_error(f"Failed to copy {src}")
+                        continue
+
+                    self.current_index = index + 1
+
+                if not self._cancelled:
+                    from tstomkv.files import humanSize
+
+                    size_str = humanSize(self.total_bytes_transferred)
+                    self._on_copy_progress(
+                        1.0,
+                        f"Transfer complete: {len(self.file_pairs)} files copied ({size_str})",
+                        self.total_bytes_transferred,
+                        finished=True,
+                    )
 
             except Exception as e:
                 self._on_copy_error(str(e))
 
         def _start_copy(self):
-            """Start the file copy in background threads."""
-            monitor_thread = threading.Thread(
-                target=self._monitor_progress, daemon=True
-            )
-            monitor_thread.start()
-
-            def _copy_file():
-                try:
-                    success = getFile(self.src, self.dst, banner=False)
-                    if success:
-                        self._on_copy_progress(1.0, "Transfer complete", finished=True)
-                    else:
-                        self._on_copy_error(f"Failed to copy {self.src}")
-                except Exception as e:
-                    self._on_copy_error(str(e))
-
-            copy_thread = threading.Thread(target=_copy_file, daemon=True)
+            """Start the file copy in background thread."""
+            copy_thread = threading.Thread(target=self._copy_all_files, daemon=True)
             copy_thread.start()
 
     class FilteredTitlesWindow(Gtk.ApplicationWindow):
@@ -440,32 +530,39 @@ if Gtk is not None:
             )
 
         def _on_copy_files_clicked(self, _button):
-            """Launch copy dialog for first selected title's first recording."""
+            """Launch copy dialog for all files in selected titles."""
             selected = self._get_selected_titles()
             if not selected:
                 self.status_label.set_text("Error: No titles selected")
                 return
 
-            first_selected = selected[0]
-            recordings = first_selected.get("recordings", [])
-            if not recordings:
-                self.status_label.set_text("Error: No recordings in selected title")
-                return
+            file_pairs = []
+            for title_row in selected:
+                recordings = title_row.get("recordings", [])
+                for rec in recordings:
+                    src_file = rec.get("filename")
+                    if not src_file:
+                        continue
 
-            src_file = recordings[0].get("filename")
-            if not src_file:
-                self.status_label.set_text("Error: No valid source file")
+                    try:
+                        import tempfile
+
+                        tmpdir = tempfile.gettempdir()
+                        dst_file = str(Path(tmpdir) / Path(src_file).name)
+                        file_pairs.append((src_file, dst_file))
+                    except Exception as e:
+                        errorNotify(sys.exc_info()[2], e)
+
+            if not file_pairs:
+                self.status_label.set_text("Error: No valid files to copy")
                 return
 
             try:
-                import tempfile
-
-                tmpdir = tempfile.gettempdir()
-                dst_file = str(Path(tmpdir) / Path(src_file).name)
-                dialog = FileCopyProgressDialog(
-                    self.get_application(), src_file, dst_file
-                )
+                dialog = FileCopyProgressDialog(self.get_application(), file_pairs)
                 dialog.present()
+                self.status_label.set_text(
+                    f"Copying {len(file_pairs)} file{'s' if len(file_pairs) != 1 else ''}..."
+                )
             except Exception as e:
                 errorNotify(sys.exc_info()[2], e)
                 self.status_label.set_text(f"Error: {e}")

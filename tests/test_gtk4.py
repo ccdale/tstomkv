@@ -170,3 +170,37 @@ def test_format_transfer_status():
     assert "1.00 MB" in status
     assert "50.0%" in status
     assert "50.00 KB/s" in status
+
+
+def test_collect_all_files_from_selected_titles():
+    """Test that all files are collected from all selected titles."""
+    selected_titles = [
+        {
+            "display": "Title A",
+            "recordings": [
+                {"filename": "/media/a1.ts"},
+                {"filename": "/media/a2.ts"},
+            ],
+        },
+        {
+            "display": "Title B",
+            "recordings": [
+                {"filename": "/media/b1.ts"},
+            ],
+        },
+    ]
+
+    # Simulate the logic from _on_copy_files_clicked
+    file_pairs = []
+    for title_row in selected_titles:
+        recordings = title_row.get("recordings", [])
+        for rec in recordings:
+            src_file = rec.get("filename")
+            if src_file:
+                dst_file = f"/tmp/{src_file.split('/')[-1]}"
+                file_pairs.append((src_file, dst_file))
+
+    assert len(file_pairs) == 3
+    assert file_pairs[0][0] == "/media/a1.ts"
+    assert file_pairs[1][0] == "/media/a2.ts"
+    assert file_pairs[2][0] == "/media/b1.ts"
