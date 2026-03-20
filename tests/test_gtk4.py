@@ -248,3 +248,38 @@ def test_reconcile_existing_destination_replace_when_hash_differs(
     assert skip_copy is False
     assert "Replacing" in status
     assert not dst.exists()
+
+
+def test_parse_stats_content_extracts_values():
+    raw = """frame=10
+out_time_ms=2500000
+speed=1.25x
+progress=continue
+"""
+    stats = gtk4_transfer._parse_stats_content(raw)
+    assert stats["frame"] == "10"
+    assert stats["out_time_ms"] == "2500000"
+    assert stats["speed"] == "1.25x"
+    assert stats["progress"] == "continue"
+
+
+def test_stats_elapsed_seconds_uses_fallback_when_invalid():
+    stats = {"out_time_ms": "N/A"}
+    assert gtk4_transfer._stats_elapsed_seconds(stats, fallback=3.5) == 3.5
+
+
+def test_conversion_progress_fraction_bounds():
+    assert gtk4_transfer._conversion_progress_fraction(5, 10) == 0.5
+    assert gtk4_transfer._conversion_progress_fraction(15, 10) == 1.0
+    assert gtk4_transfer._conversion_progress_fraction(-2, 10) == 0.0
+    assert gtk4_transfer._conversion_progress_fraction(2, 0) == 0.0
+
+
+def test_format_conversion_status_with_duration():
+    status = gtk4_transfer._format_conversion_status(
+        "video.ts", elapsed_seconds=30, duration_seconds=120, speed="0.9x"
+    )
+    assert "Converting video.ts" in status
+    assert "25.0%" in status
+    assert "00:30/02:00" in status
+    assert "0.9x" in status

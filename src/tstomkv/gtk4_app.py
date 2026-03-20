@@ -54,7 +54,7 @@ if Gtk is not None:
             show_list_btn.connect("clicked", self._on_show_conversion_list_clicked)
             controls.append(show_list_btn)
 
-            copy_btn = Gtk.Button(label="Copy Files to Temp")
+            copy_btn = Gtk.Button(label="Copy && Convert Files")
             copy_btn.connect("clicked", self._on_copy_files_clicked)
             controls.append(copy_btn)
 
@@ -162,7 +162,7 @@ if Gtk is not None:
                 dialog = FileCopyProgressDialog(self.get_application(), file_pairs)
                 dialog.present()
                 self.status_label.set_text(
-                    f"Copying {len(file_pairs)} file{'s' if len(file_pairs) != 1 else ''}..."
+                    f"Copying and converting {len(file_pairs)} file{'s' if len(file_pairs) != 1 else ''}..."
                 )
             except Exception as e:
                 errorNotify(sys.exc_info()[2], e)

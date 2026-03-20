@@ -6,6 +6,7 @@ import threading
 import time
 from pathlib import Path
 
+from .ffmpeg import convert_ts_to_mkv, videoDuration
 from .files import getFile, humanSize, remoteCommand, remoteFileSize
 from .gtk4_runtime import GLib, Gtk
 
@@ -133,6 +134,63 @@ def _reconcile_existing_destination(src, dst):
     return False, f"Replacing {name}: could not verify hash match"
 
 
+def _parse_stats_content(content):
+    """Parse ffmpeg key=value progress content into a dict."""
+    stats = {}
+    for line in content.splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.strip().split("=", 1)
+        stats[key] = value
+    return stats
+
+
+def _read_stats_file(statsfile):
+    """Read and parse a ffmpeg stats file, returning an empty dict on error."""
+    try:
+        path = Path(statsfile)
+        if not path.exists():
+            return {}
+        return _parse_stats_content(path.read_text(encoding="utf-8", errors="ignore"))
+    except Exception:
+        return {}
+
+
+def _stats_elapsed_seconds(stats, fallback=0.0):
+    """Extract elapsed seconds from ffmpeg stats data."""
+    for key in ("out_time_ms", "out_time_us"):
+        raw = stats.get(key)
+        if raw and raw != "N/A":
+            try:
+                return int(raw) / 1_000_000
+            except ValueError:
+                continue
+    return fallback
+
+
+def _conversion_progress_fraction(elapsed_seconds, duration_seconds):
+    """Return conversion fraction as a value between 0.0 and 1.0."""
+    if duration_seconds and duration_seconds > 0:
+        return min(1.0, max(0.0, elapsed_seconds / duration_seconds))
+    return 0.0
+
+
+def _format_conversion_status(filename, elapsed_seconds, duration_seconds, speed):
+    """Format conversion status text for the hybrid progress dialog."""
+    elapsed_txt = _format_elapsed_mmss(elapsed_seconds)
+    speed_txt = speed if speed else "N/A"
+
+    if duration_seconds and duration_seconds > 0:
+        duration_txt = _format_elapsed_mmss(duration_seconds)
+        pct = _conversion_progress_fraction(elapsed_seconds, duration_seconds) * 100.0
+        return (
+            f"Converting {filename}: {pct:.1f}% "
+            f"({elapsed_txt}/{duration_txt}) speed {speed_txt}"
+        )
+
+    return f"Converting {filename}: elapsed {elapsed_txt} speed {speed_txt}"
+
+
 def copy_file_with_progress(src, dst, callback=None, error_callback=None):
     """Copy a file from remote media server with progress monitoring.
 
@@ -175,20 +233,23 @@ def copy_file_with_progress(src, dst, callback=None, error_callback=None):
 if Gtk is not None:
 
     class FileCopyProgressDialog(Gtk.ApplicationWindow):
-        """GTK4 progress dialog for copying multiple files from media server."""
+        """GTK4 hybrid progress dialog for copying and converting files."""
 
         def __init__(self, application, file_pairs):
             super().__init__(application=application)
-            self.set_title("Copying Files from Media Server")
+            self.set_title("Copying and Converting Files")
             self.set_default_size(550, 250)
             self.set_modal(True)
             self.file_pairs = file_pairs  # List of (src, dst) tuples
             self.current_index = 0
             self._cancelled = False
             self._finished = False
+            self._conversion_finished = False
             self.total_size = 0  # Total bytes to copy
             self.total_bytes_transferred = 0  # Cumulative bytes transferred
             self._overall_start_time = time.monotonic()
+            self.total_conversions = 0
+            self.completed_conversions = 0
 
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
             box.set_margin_top(20)
@@ -213,6 +274,10 @@ if Gtk is not None:
             self.overall_label.set_xalign(0)
             box.append(self.overall_label)
 
+            self.conversion_label = Gtk.Label(label="Conversion: pending")
+            self.conversion_label.set_xalign(0)
+            box.append(self.conversion_label)
+
             button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
             button_box.set_halign(Gtk.Align.END)
 
@@ -236,28 +301,35 @@ if Gtk is not None:
             self.cancel_btn.set_sensitive(False)
             self.status_label.set_text("Cancellation requested...")
 
+        def _set_overall_label(self, overall_bytes=None):
+            """Render overall bytes progress and total elapsed time."""
+            if overall_bytes is None:
+                overall_bytes = self.total_bytes_transferred
+
+            elapsed_text = _format_elapsed_mmss(
+                time.monotonic() - self._overall_start_time
+            )
+            if self.total_size > 0:
+                overall_human = humanSize(overall_bytes)
+                total_human = humanSize(self.total_size)
+                overall_pct = (
+                    (overall_bytes / self.total_size * 100)
+                    if self.total_size > 0
+                    else 0.0
+                )
+                self.overall_label.set_text(
+                    f"Overall: {overall_human} / {total_human} ({overall_pct:.1f}%) | Elapsed: {elapsed_text}"
+                )
+            else:
+                self.overall_label.set_text(
+                    f"Overall: calculating... | Elapsed: {elapsed_text}"
+                )
+
         def _on_copy_progress(self, progress, status, overall_bytes, finished=False):
             def _update_ui():
                 self.progress_bar.set_fraction(progress)
                 self.status_label.set_text(status)
-                elapsed_text = _format_elapsed_mmss(
-                    time.monotonic() - self._overall_start_time
-                )
-                if self.total_size > 0:
-                    overall_human = humanSize(overall_bytes)
-                    total_human = humanSize(self.total_size)
-                    overall_pct = (
-                        (overall_bytes / self.total_size * 100)
-                        if self.total_size > 0
-                        else 0.0
-                    )
-                    self.overall_label.set_text(
-                        f"Overall: {overall_human} / {total_human} ({overall_pct:.1f}%) | Elapsed: {elapsed_text}"
-                    )
-                else:
-                    self.overall_label.set_text(
-                        f"Overall: calculating... | Elapsed: {elapsed_text}"
-                    )
+                self._set_overall_label(overall_bytes)
                 if finished:
                     self._finished = True
                     self.cancel_btn.set_sensitive(False)
@@ -275,6 +347,18 @@ if Gtk is not None:
 
             if GLib is not None:
                 GLib.idle_add(_show_error)
+
+        def _on_conversion_progress(self, progress, status, overall_fraction):
+            def _update_ui():
+                self.progress_bar.set_fraction(progress)
+                self.status_label.set_text(status)
+                self._set_overall_label(self.total_bytes_transferred)
+                self.conversion_label.set_text(
+                    f"Conversion: {self.completed_conversions}/{self.total_conversions} files complete ({overall_fraction * 100:.1f}%)"
+                )
+
+            if GLib is not None:
+                GLib.idle_add(_update_ui)
 
         def _monitor_single_progress(self, src, dst, src_size):
             """Monitor progress for a single file transfer, return bytes transferred."""
@@ -316,13 +400,129 @@ if Gtk is not None:
                     pass
             return total
 
+        def _monitor_conversion_progress(self, src_path, statsfile, duration_seconds):
+            """Monitor ffmpeg progress stats for a single conversion."""
+            last_elapsed = 0.0
+            src_name = Path(src_path).name
+            while not self._conversion_finished and not self._cancelled:
+                stats = _read_stats_file(statsfile)
+                elapsed = _stats_elapsed_seconds(stats, fallback=last_elapsed)
+                last_elapsed = elapsed
+                speed = stats.get("speed", "N/A")
+                progress = _conversion_progress_fraction(elapsed, duration_seconds)
+                if stats.get("progress") == "end":
+                    progress = 1.0
+
+                overall_fraction = (
+                    (self.completed_conversions + progress) / self.total_conversions
+                    if self.total_conversions > 0
+                    else 0.0
+                )
+                status = _format_conversion_status(
+                    src_name, elapsed, duration_seconds, speed
+                )
+                self._on_conversion_progress(progress, status, overall_fraction)
+
+                if stats.get("progress") == "end":
+                    break
+                time.sleep(1)
+
+        def _convert_single_file(self, ts_path, mkv_path, statsfile):
+            """Run conversion worker for one ts file."""
+            convert_ts_to_mkv(ts_path, mkv_path, statsfile, overwrite=True)
+
+        def _convert_all_files(self, local_ts_files):
+            """Convert copied ts files one at a time with concurrent progress monitor."""
+            convert_candidates = [
+                path for path in local_ts_files if str(path).lower().endswith(".ts")
+            ]
+            self.total_conversions = len(convert_candidates)
+            self.completed_conversions = 0
+
+            if self.total_conversions == 0:
+                self._on_conversion_progress(1.0, "No .ts files to convert", 1.0)
+                return 0
+
+            for index, ts_path in enumerate(convert_candidates):
+                if self._cancelled:
+                    break
+
+                ts_name = Path(ts_path).name
+                mkv_path = str(Path(ts_path).with_suffix(".mkv"))
+                statsfile = f"{ts_path}-transcode.stats"
+
+                try:
+                    stats_path = Path(statsfile)
+                    if stats_path.exists():
+                        stats_path.unlink()
+                except Exception:
+                    pass
+
+                def _update_file_label():
+                    self.file_label.set_text(
+                        f"Converting: {ts_name} ({index + 1}/{self.total_conversions})"
+                    )
+
+                if GLib is not None:
+                    GLib.idle_add(_update_file_label)
+
+                duration_seconds = videoDuration(ts_path) or 0
+                self._conversion_finished = False
+
+                convert_thread = threading.Thread(
+                    target=self._convert_single_file,
+                    args=(ts_path, mkv_path, statsfile),
+                    daemon=True,
+                )
+                monitor_thread = threading.Thread(
+                    target=self._monitor_conversion_progress,
+                    args=(ts_path, statsfile, duration_seconds),
+                    daemon=True,
+                )
+
+                convert_thread.start()
+                monitor_thread.start()
+
+                convert_thread.join()
+                self._conversion_finished = True
+                monitor_thread.join(timeout=10)
+
+                if not Path(mkv_path).exists():
+                    overall_fraction = (
+                        self.completed_conversions / self.total_conversions
+                        if self.total_conversions > 0
+                        else 0.0
+                    )
+                    self._on_conversion_progress(
+                        0.0,
+                        f"Conversion failed for {ts_name}",
+                        overall_fraction,
+                    )
+                    continue
+
+                self.completed_conversions += 1
+                overall_fraction = (
+                    self.completed_conversions / self.total_conversions
+                    if self.total_conversions > 0
+                    else 0.0
+                )
+                self._on_conversion_progress(
+                    1.0,
+                    f"Converted {ts_name} to {Path(mkv_path).name}",
+                    overall_fraction,
+                )
+
+            return self.completed_conversions
+
         def _copy_all_files(self):
-            """Copy all files sequentially in background thread."""
+            """Copy all files, then convert them sequentially."""
             try:
                 self.total_size = self._calculate_total_size()
                 if self.total_size <= 0:
                     self._on_copy_error("Could not determine total size of files")
                     return
+
+                copied_local_files = []
 
                 for index, (src, dst) in enumerate(self.file_pairs):
                     if self._cancelled:
@@ -348,6 +548,7 @@ if Gtk is not None:
                     )
                     if skip_copy:
                         self.total_bytes_transferred += src_size
+                        copied_local_files.append(dst)
                         overall_progress = (
                             self.total_bytes_transferred / self.total_size
                             if self.total_size > 0
@@ -389,6 +590,7 @@ if Gtk is not None:
 
                     if success and Path(dst).exists():
                         self.total_bytes_transferred += os.path.getsize(dst)
+                        copied_local_files.append(dst)
 
                     if not success:
                         if not self._cancelled:
@@ -398,10 +600,21 @@ if Gtk is not None:
                     self.current_index = index + 1
 
                 if not self._cancelled:
+                    converted_count = self._convert_all_files(copied_local_files)
                     size_str = humanSize(self.total_bytes_transferred)
                     self._on_copy_progress(
                         1.0,
-                        f"Transfer complete: {len(self.file_pairs)} files copied ({size_str})",
+                        (
+                            f"Copy+convert complete: {len(copied_local_files)} file(s) copied "
+                            f"({size_str}), {converted_count} conversion(s) complete"
+                        ),
+                        self.total_bytes_transferred,
+                        finished=True,
+                    )
+                else:
+                    self._on_copy_progress(
+                        1.0,
+                        "Operation cancelled",
                         self.total_bytes_transferred,
                         finished=True,
                     )
