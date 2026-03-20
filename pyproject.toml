@@ -1,6 +1,6 @@
 [project]
 name = "tstomkv"
-version = "1.0.0"
+version = "1.0.1"
 description = "A simple tool to convert TS files to MKV format over the network."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -20,8 +20,8 @@ dev = [
 ]
 
 [project.scripts]
-kodimkv = "tstomkv.cli:kodimkv"
-tvhmkv = "tstomkv.cli:tvhmkv"
+kodimkv = "tstomkv.commands:kodimkv"
+tvhmkv = "tstomkv.commands:tvhmkv"
 gtk4titles = "tstomkv.gtk4:main"
 
 [build-system]

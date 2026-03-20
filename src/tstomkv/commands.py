@@ -1,3 +1,5 @@
+"""Command entry points for file transfer and conversion workflows."""
+
 import os
 import sys
 import time
@@ -17,8 +19,7 @@ from tstomkv.files import (
     sendFile,
     stopNow,
 )
-from tstomkv.guihelper import humanTime, transcodeFile
-from tstomkv.recordings import filteredTitles  # , recordedTitles
+from tstomkv.recordings import filteredTitles
 from tstomkv.tvh import fileMoved
 
 
@@ -30,11 +31,29 @@ class CopyError(Exception):
     pass
 
 
+def transcodeFile(src, dst, statsfile, overwrite=False):
+    """Run ffmpeg conversion and ensure destination directory exists."""
+    dirname = os.path.dirname(dst)
+    Path(dirname).mkdir(mode=0o755, exist_ok=True, parents=True)
+    return convert_ts_to_mkv(src, dst, statsfile, overwrite=overwrite)
+
+
+def humanTime(seconds):
+    """Convert seconds to a compact human-readable format."""
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    if h > 0:
+        return f"{int(h)}h {int(m)}m {int(s)}s"
+    if m > 0:
+        return f"{int(m)}m {int(s)}s"
+    return f"{int(s)}s"
+
+
 def doStats(statsfile, duration):
-    """Read the stats file and show a progress bar"""
+    """Read ffmpeg progress stats and display a terminal progress bar."""
     cn = 0
     holdoff = 5
-    while Path(statsfile).exists() is False:
+    while not Path(statsfile).exists():
         time.sleep(holdoff)
         cn += 1
         if cn > 12:
@@ -59,10 +78,9 @@ def doStats(statsfile, duration):
                         elapsed = lastelapsed
                     lastelapsed = elapsed
                     progressBar(elapsed, duration)
-                if "progress" in stats:
-                    if stats["progress"] == "end":
-                        inprogress = False
-        print()  # newline after progress bar
+                if "progress" in stats and stats["progress"] == "end":
+                    inprogress = False
+        print()
         print("Transcoding complete")
     else:
         print("No duration info, cannot show progress")
@@ -78,47 +96,31 @@ def kodimkv():
     if len(sys.argv) > 1:
         skip = int(sys.argv[1])
     for src in files:
-        # isfilm = False
-        if len(sys.argv) > 1:
-            if skip > 0:
-                print(f"Skipping {src}")
-                skip -= 1
-                continue
+        if len(sys.argv) > 1 and skip > 0:
+            print(f"Skipping {src}")
+            skip -= 1
+            continue
         if stopNow():
             raise StopAll("STOP file found, exiting")
         if cfg["mediaserver"].get("koditvdir") in src:
             replace = cfg["mediaserver"]["koditvdir"]
-            # dest = src.replace(
-            #     cfg["mediaserver"]["koditvdir"], cfg["DEFAULT"]["transcodedir"]
-            # )
-            # destdir = Path(dest).parent
         elif cfg["mediaserver"].get("kodifilmdir") in src:
             replace = cfg["mediaserver"]["kodifilmdir"]
-            # isfilm = True
-            # dest = src.replace(
-            #     cfg["mediaserver"]["kodifilmdir"], cfg["DEFAULT"]["transcodedir"]
-            # )
-            # destdir = Path(dest).parent
         else:
             print(f"Skipping {src} as not in tvdir or filmdir")
             continue
         fps = pathManipulation(src, replace=replace, mkdestdir=True)
         starttime = time.time()
-        # destdir.mkdir(mode=0o755, exist_ok=True, parents=True)
         if not getFile(str(fps["src"]), str(fps["dest"]), banner=True):
             raise Exception(f"Failed to copy {fps['src']} to {fps['dest']}")
         endtime = time.time()
         print(
             f"Time taken to copy {fps['src']} to {fps['dest']}: {humanTime(endtime - starttime)}"
         )
-        # tsrc = dest
-        # tdest = dest.replace(".ts", ".mkv")
-        # vduration = videoDuration(tsrc)
         statsfile = str(fps["dest"]) + "-transcode.stats"
         fthread = Thread(
             target=transcodeFile,
             args=(str(fps["dest"]), str(fps["destmkv"]), statsfile),
-            # args=(tsrc, tdest, statsfile),
             kwargs={"overwrite": True},
         )
         sthread = Thread(target=doStats, args=(statsfile, videoDuration(fps["dest"])))
@@ -133,38 +135,18 @@ def kodimkv():
             print("Duration check OK")
             finalfn = remoteFinalFileName(fps["destmkv"])
             sendFile(str(fps["destmkv"]), finalfn, banner=True)
-            # fileMoved(str(fps["src"]), str(fps["srcmkv"]))
-            remoteCommand(f"rm \"{str(fps['src'])}\"", banner=True)
+            remoteCommand(f'rm "{str(fps["src"])}"', banner=True)
         else:
             print("Duration check FAILED, not moving file or deleting source")
             raise CopyError("Duration check failed")
         nexttime = time.time()
         print(f"time taken: {humanTime(nexttime - endtime)}")
-        # nexttime = time.time()
-        # print(f"time taken: {humanTime(nexttime - endtime)}")
-        # if isfilm:
-        #     # move the file to the film directory
-        #     dest = tdest.replace(
-        #         cfg["DEFAULT"]["transcodedir"], cfg["mediaserver"]["kodifilmdir"]
-        #     )
-        # else:
-        #     dest = tdest.replace(
-        #         cfg["DEFAULT"]["transcodedir"], cfg["mediaserver"]["koditvdir"]
-        #     )
-        # if not sendFile(tdest, dest, banner=True):
-        #     raise Exception(f"Failed to send {tdest} to {dest}")
-        # print(f"time taken to send file: {humanTime(time.time() - nexttime)}")
-        # res = remoteCommand(f"rm '{src}'", banner=True)
-        # if res != "":
-        #     raise Exception(f"Failed to remove remote file {src}")
-        # print(f"process time for {src}: {humanTime(time.time() - starttime)}")
 
 
 def tvhmkv():
-    """Entry point for tvhmkv script"""
+    """Entry point for tvhmkv script."""
     try:
         print(f"Starting tvhmkv {tstomkv.getVersion()}")
-        # recs, titles = recordedTitles()
         recs, titles = filteredTitles()
         print(f"{len(recs)} Transport Stream recordings found")
         for title in titles:
@@ -198,13 +180,13 @@ def tvhmkv():
                 fthread.join()
                 sthread.join()
                 print(
-                    f"Transcoding and stats monitoring complete for {Path(fps["dest"]).name}"
+                    f"Transcoding and stats monitoring complete for {Path(fps['dest']).name}"
                 )
                 if checkPercentDuration(fps["dest"], fps["destmkv"]):
                     print("Duration check OK")
                     sendFile(str(fps["destmkv"]), str(fps["srcmkv"]), banner=True)
                     fileMoved(str(fps["src"]), str(fps["srcmkv"]))
-                    remoteCommand(f"rm \"{str(fps['src'])}\"", banner=True)
+                    remoteCommand(f'rm "{str(fps["src"])}"', banner=True)
                 else:
                     print("Duration check FAILED, not moving file or deleting source")
                     raise CopyError("Duration check failed")
