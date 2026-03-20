@@ -172,6 +172,13 @@ def test_format_transfer_status():
     assert "50.00 KB/s" in status
 
 
+def test_format_elapsed_mmss():
+    assert gtk4._format_elapsed_mmss(0) == "00:00"
+    assert gtk4._format_elapsed_mmss(65) == "01:05"
+    assert gtk4._format_elapsed_mmss(600) == "10:00"
+    assert gtk4._format_elapsed_mmss(-3) == "00:00"
+
+
 def test_collect_all_files_from_selected_titles():
     """Test that all files are collected from all selected titles."""
     selected_titles = [
