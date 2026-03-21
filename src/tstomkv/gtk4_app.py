@@ -142,11 +142,11 @@ if Gtk is not None:
             deselect_all_btn.connect("clicked", self._on_deselect_all_clicked)
             controls.append(deselect_all_btn)
 
-            show_list_btn = Gtk.Button(label="Show Conversion List")
+            show_list_btn = Gtk.Button(label="Show List")
             show_list_btn.connect("clicked", self._on_show_conversion_list_clicked)
             controls.append(show_list_btn)
 
-            copy_btn = Gtk.Button(label="Copy && Convert Files")
+            copy_btn = Gtk.Button(label="Convert")
             copy_btn.connect("clicked", self._on_copy_files_clicked)
             controls.append(copy_btn)
 
