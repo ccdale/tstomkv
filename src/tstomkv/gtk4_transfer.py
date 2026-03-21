@@ -61,10 +61,16 @@ def _format_transfer_status(filename, src_size, dst_size, elapsed, rate):
 
 
 def _format_elapsed_mmss(elapsed_seconds):
-    """Format elapsed seconds as mm:ss."""
+    """Format elapsed seconds as mm:ss or H:mm:ss if >= 1 hour."""
     total_seconds = max(0, int(elapsed_seconds))
-    minutes, seconds = divmod(total_seconds, 60)
-    return f"{minutes:02d}:{seconds:02d}"
+
+    if total_seconds >= 3600:
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    else:
+        minutes, seconds = divmod(total_seconds, 60)
+        return f"{minutes:02d}:{seconds:02d}"
 
 
 def _is_sha256_digest(value):
