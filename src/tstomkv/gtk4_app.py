@@ -238,10 +238,9 @@ if Gtk is not None:
                         continue
 
                     try:
-                        import tempfile
-
-                        tmpdir = tempfile.gettempdir()
-                        dst_file = str(Path(tmpdir) / Path(src_file).name)
+                        tmpdir = Path.home() / "tmp"
+                        tmpdir.mkdir(parents=True, exist_ok=True)
+                        dst_file = str(tmpdir / Path(src_file).name)
                         file_pairs.append((src_file, dst_file))
                     except Exception as e:
                         errorNotify(sys.exc_info()[2], e)

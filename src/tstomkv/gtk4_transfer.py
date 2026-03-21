@@ -624,6 +624,32 @@ if Gtk is not None:
                     )
                     continue
 
+                mkv_dur = videoDuration(mkv_path)
+                if duration_seconds > 0 and mkv_dur is not None:
+                    if abs(mkv_dur - duration_seconds) / duration_seconds > 0.02:
+                        overall_fraction = (
+                            self.completed_conversions / self.total_conversions
+                            if self.total_conversions > 0
+                            else 0.0
+                        )
+                        msg = (
+                            f"Duration mismatch for {ts_name}: "
+                            f"source {duration_seconds}s, mkv {mkv_dur}s "
+                            f"(>{2}% difference)"
+                        )
+                        self._on_conversion_progress(0.0, msg, overall_fraction)
+                        publish_overall = (
+                            self.completed_publishes / self.total_publishes
+                            if self.total_publishes > 0
+                            else 0.0
+                        )
+                        self._on_publish_progress(
+                            f"Publish skipped for {ts_name}: duration mismatch",
+                            0.0,
+                            publish_overall,
+                        )
+                        continue
+
                 def _publish_callback(step_status, step_fraction):
                     publish_overall = (
                         (self.completed_publishes + step_fraction)
