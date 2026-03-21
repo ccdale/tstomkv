@@ -238,7 +238,7 @@ if Gtk is not None:
                         continue
 
                     try:
-                        tmpdir = Path.home() / "tmp"
+                        tmpdir = Path.home() / "tmp" / "transcode3"
                         tmpdir.mkdir(parents=True, exist_ok=True)
                         dst_file = str(tmpdir / Path(src_file).name)
                         file_pairs.append((src_file, dst_file))
