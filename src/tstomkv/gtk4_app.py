@@ -100,7 +100,7 @@ if Gtk is not None:
             image.set_pixel_size(24)
             title_box.append(image)
 
-        label = Gtk.Label(label="tstomkv GTK4")
+        label = Gtk.Label(label=f"TS to MKV {tstomkv.getVersion()}")
         title_box.append(label)
         return title_box
 
@@ -109,7 +109,7 @@ if Gtk is not None:
 
         def __init__(self, application):
             super().__init__(application=application)
-            self.set_title(f"tstomkv GTK4 - {tstomkv.getVersion()}")
+            self.set_title(f"TS to MKV {tstomkv.getVersion()}")
             self.set_default_size(980, 700)
             self._rows = []
             self._title_checkboxes = {}
